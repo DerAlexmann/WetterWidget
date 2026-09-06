@@ -1,0 +1,6 @@
+# Zeilenenden im Repositorium einheitlich, in der Arbeitskopie wie im System
+* text=auto
+
+*.cmd text eol=crlf
+*.png binary
+*.ico binary

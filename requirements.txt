@@ -1,0 +1,6 @@
+# Laufzeit: zeigt die Oberflaeche im nativen Fenster (WebView2)
+pywebview>=5.0
+
+# Nur zum Bauen der eigenstaendigen .exe - fuer den Betrieb aus der
+# Quelle heraus nicht noetig:
+pyinstaller>=6.0

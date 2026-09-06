@@ -1,0 +1,21 @@
+# Ergebnisse des Bauens - die fertige .exe haengt an der Release-Seite,
+# nicht im Verlauf des Repositoriums.
+build/
+dist/
+*.spec
+
+# Zustand des laufenden Widgets, entsteht neben der .exe
+wetter-widget.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Alte Arbeitskopie der Oberflaeche, gehoert nicht zur Veroeffentlichung
+wetter-widget_1.html
+
+# Windows
+Thumbs.db
+desktop.ini

@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<!--
+  Wetter Widget - Oberfläche, Farbpaletten, Sprachtabelle und Wetterabruf.
+  Läuft im Fenster von wetter_widget.py und ebenso allein im Browser.
+
+  Licensed under MIT License
+  Copyright 2026 Alexander Unverhau
+  Created with assistance of Claude AI
+-->
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Wetter Widget</title>
+<style>
+  /* ----------------------------------------------------------------------
+     Farbwerte
+
+     Die Namen entsprechen den Rollen aus der Bild-Toolbox und dem
+     QR-Code-Generator, damit alle Programme gleich aussehen. Die Werte hier
+     sind nur die Startfarben (dunkles Schema) - beim Umschalten schreibt
+     thema_anwenden() die Palette aus THEMES in genau diese Variablen.
+     ---------------------------------------------------------------------- */
+  :root{
+    --bg: #12161d;
+    --card: #1a1f28;
+    --card-alt: #151a22;
+    --border: #2c3441;
+    --text: #e6eaf0;
+    --muted: #98a2b3;
+    --header: #0e1218;
+    --header-text: #b8c2d0;
+    --header-title: #ffffff;
+    --header-hover: #212a38;
+    --accent: #4a90e8;
+    --accent-dark: #3a7ad0;
+    --on-accent: #ffffff;
+    --ok: #3fb972;
+    --danger: #e05a5a;
+    --btn-bg: #2a323f;
+    --field-bg: #232b36;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    height:100%;
+    background:var(--bg);
+    font-family:"Segoe UI", -apple-system, sans-serif;
+    color:var(--text);
+  }
+  body{
+    padding:10px;
+    /* Das Widget wird mit der Maus auf seiner Fläche verschoben; ohne diese
+       Sperre markiert das Ziehen stattdessen Text. */
+    user-select:none;
+  }
+
+  #app{
+    max-width:380px;
+    margin:0 auto;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:16px 18px 14px;
+  }
+
+  /* -- Ortssuche --------------------------------------------------------- */
+  .place-search{
+    display:flex; gap:6px; margin-bottom:16px;
+  }
+  .place-search input{
+    flex:1;
+    background:var(--field-bg);
+    border:1px solid var(--border);
+    color:var(--text);
+    font-family:Consolas, monospace;
+    font-size:13px;
+    padding:8px 10px;
+    border-radius:3px;
+    outline:none;
+    user-select:text;
+  }
+  .place-search input:focus{ border-color:var(--accent); }
+  .place-search button{
+    background:var(--accent);
+    color:var(--on-accent);
+    border:none;
+    font-family:inherit;
+    font-weight:600;
+    font-size:13px;
+    padding:0 14px;
+    border-radius:3px;
+    cursor:pointer;
+  }
+  .place-search button:hover{ background:var(--accent-dark); }
+  .place-search button:active{ transform:translateY(1px); }
+
+  .station-line{
+    font-family:Consolas, monospace;
+    font-size:11px;
+    letter-spacing:0.02em;
+    color:var(--muted);
+    margin-bottom:2px;
+    min-height:14px;
+  }
+  .city-name{
+    font-size:19px;
+    font-weight:600;
+    margin-bottom:14px;
+    min-height:24px;
+  }
+
+  /* -- Hauptanzeige ------------------------------------------------------ */
+  .main-readout{
+    display:flex;
+    align-items:flex-end;
+    gap:16px;
+    border-top:1px solid var(--border);
+    border-bottom:1px solid var(--border);
+    padding:16px 0;
+    margin-bottom:14px;
+  }
+  .temp{
+    font-family:Consolas, monospace;
+    font-size:56px;
+    font-weight:500;
+    line-height:1;
+    color:var(--accent);
+  }
+  .temp sup{
+    font-size:22px;
+    font-weight:400;
+    color:var(--muted);
+    margin-left:2px;
+  }
+  .condition-col{
+    flex:1;
+    padding-bottom:6px;
+  }
+  .condition-text{
+    font-size:14px;
+    margin-bottom:6px;
+  }
+  .updated{
+    font-family:Consolas, monospace;
+    font-size:10px;
+    color:var(--muted);
+  }
+
+  .metrics{
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:0;
+    margin-bottom:16px;
+  }
+  .metric{
+    border-right:1px solid var(--border);
+    padding:0 12px;
+  }
+  .metric:first-child{padding-left:0;}
+  .metric:last-child{border-right:none; padding-right:0;}
+  .metric-label{
+    font-size:10px;
+    color:var(--muted);
+    margin-bottom:4px;
+  }
+  .metric-value{
+    font-family:Consolas, monospace;
+    font-size:16px;
+  }
+  .metric-value.accent{ color:var(--accent); }
+
+  /* -- Stundenvorhersage ------------------------------------------------- */
+  .forecast{
+    display:flex;
+    justify-content:space-between;
+  }
+  .fc-item{
+    text-align:center;
+    flex:1;
+  }
+  .fc-time{
+    font-family:Consolas, monospace;
+    font-size:10px;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .fc-temp{
+    font-family:Consolas, monospace;
+    font-size:14px;
+  }
+  .fc-bar-track{
+    width:3px;
+    height:36px;
+    background:var(--btn-bg);
+    border-radius:2px;
+    margin:6px auto;
+    position:relative;
+    overflow:hidden;
+  }
+  .fc-bar-fill{
+    position:absolute;
+    bottom:0;
+    width:100%;
+    background:var(--ok);
+    border-radius:2px;
+  }
+
+  .msg{
+    font-family:Consolas, monospace;
+    font-size:12px;
+    color:var(--muted);
+    padding:20px 0;
+    text-align:center;
+  }
+  .msg.error{ color:var(--danger); }
+
+  .source{
+    font-family:Consolas, monospace;
+    font-size:9px;
+    color:var(--muted);
+    text-align:right;
+    margin-top:12px;
+    opacity:0.7;
+  }
+
+  /* -- Kontextmenü -------------------------------------------------------
+     Alle Einstellungen sitzen hier, damit die Anzeige selbst frei von
+     Schaltern bleibt und das Widget auch ohne Fensterrahmen bedienbar ist.
+     ---------------------------------------------------------------------- */
+  .menu{
+    position:fixed;
+    z-index:100;
+    min-width:150px;
+    max-height:calc(100vh - 8px);
+    overflow-y:auto;
+    padding:4px 0;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:4px;
+    box-shadow:0 6px 22px rgba(0,0,0,0.45);
+    font-size:12px;
+  }
+  .menu-item{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:5px 12px 5px 8px;
+    white-space:nowrap;
+    cursor:default;
+  }
+  .menu-item:hover{ background:var(--btn-bg); }
+  .menu-item .haken{
+    width:10px;
+    flex:none;
+    color:var(--accent);
+    font-size:11px;
+  }
+  .menu-item .pfeil{
+    margin-left:auto;
+    padding-left:16px;
+    color:var(--muted);
+  }
+  .menu-trenner{
+    height:1px;
+    background:var(--border);
+    margin:4px 0;
+  }
+
+  /* -- Über dieses Programm ---------------------------------------------- */
+  .ueber{
+    position:fixed;
+    inset:10px;
+    z-index:200;
+    display:flex;
+    flex-direction:column;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:14px 16px 12px;
+    overflow-y:auto;
+  }
+  .ueber h1{
+    font-size:15px;
+    margin:0 0 2px;
+  }
+  .ueber .fassung{
+    font-family:Consolas, monospace;
+    font-size:10px;
+    color:var(--muted);
+    margin-bottom:12px;
+  }
+  .ueber h2{
+    font-size:11px;
+    font-weight:600;
+    color:var(--muted);
+    margin:12px 0 4px;
+    padding-top:8px;
+    border-top:1px solid var(--border);
+  }
+  .ueber p{
+    font-size:11.5px;
+    line-height:1.5;
+    margin:0 0 6px;
+  }
+  .ueber .lizenz{
+    font-family:Consolas, monospace;
+    font-size:11px;
+    line-height:1.6;
+    color:var(--text);
+    white-space:pre-line;
+    margin-bottom:6px;
+  }
+  .ueber button{
+    align-self:flex-end;
+    margin-top:12px;
+    background:var(--accent);
+    color:var(--on-accent);
+    border:none;
+    font-family:inherit;
+    font-weight:600;
+    font-size:12px;
+    padding:6px 16px;
+    border-radius:3px;
+    cursor:pointer;
+  }
+  .ueber button:hover{ background:var(--accent-dark); }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="place-search">
+    <input id="cityInput" type="text">
+    <button id="searchBtn"></button>
+  </div>
+
+  <div id="content">
+    <div class="msg">Lade Wetterdaten …</div>
+  </div>
+
+  <div class="source" id="sourceLine"></div>
+</div>
+
+<script>
+/* ------------------------------------------------------------------------
+   Farbschemata
+
+   Dieselben Paletten wie in der Bild-Toolbox und im QR-Code-Generator,
+   beschränkt auf die Rollen, die dieses Widget verwendet. Ein eigenes Schema
+   entsteht durch einen weiteren Eintrag mit denselben Rollennamen.
+   ------------------------------------------------------------------------ */
+const THEMES = {
+  light: {
+    BG: "#eef1f5",
+    CARD: "#ffffff",
+    CARD_ALT: "#fbfcfe",
+    BORDER: "#d7dce4",
+    TEXT: "#1b2430",
+    MUTED: "#6c7684",
+    HEADER: "#1d2330",
+    HEADER_TEXT: "#c2cad8",
+    HEADER_TITLE: "#ffffff",
+    HEADER_HOVER: "#2b3346",
+    ACCENT: "#2f7de1",
+    ACCENT_DARK: "#1f66c4",
+    ON_ACCENT: "#ffffff",
+    OK: "#2e9e5b",
+    DANGER: "#d64545",
+    BTN_BG: "#e3e8f0",
+    FIELD_BG: "#ffffff"
+  },
+  dark: {
+    BG: "#12161d",
+    CARD: "#1a1f28",
+    CARD_ALT: "#151a22",
+    BORDER: "#2c3441",
+    TEXT: "#e6eaf0",
+    MUTED: "#98a2b3",
+    HEADER: "#0e1218",
+    HEADER_TEXT: "#b8c2d0",
+    HEADER_TITLE: "#ffffff",
+    HEADER_HOVER: "#212a38",
+    ACCENT: "#4a90e8",
+    ACCENT_DARK: "#3a7ad0",
+    ON_ACCENT: "#ffffff",
+    OK: "#3fb972",
+    DANGER: "#e05a5a",
+    BTN_BG: "#2a323f",
+    FIELD_BG: "#232b36"
+  }
+};
+
+const DEFAULT_THEME = "dark";
+const SOURCE_LANGUAGE = "de";
+
+/* Transparenzstufen des Kontextmenüs. 100 % fehlt mit Absicht: das Fenster
+   wäre unsichtbar und nur noch über die Taskleiste zu erwischen. */
+const TRANSPARENZSTUFEN = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90];
+
+/* Abstände der selbsttätigen Aktualisierung in Minuten; 0 heißt "nur von
+   Hand". Der Deutsche Wetterdienst liefert stündlich neue Messwerte, öfter
+   als halbstündlich nachzufragen bringt also nichts. */
+const INTERVALLE = [0, 15, 30, 60, 180, 360];
+const INTERVALL_VORGABE = 30;
+
+/* Vom Programm gesetzte Startwerte. Beim direkten Öffnen im Browser (ohne
+   die .exe) bleibt das Objekt leer und es gelten die Vorgaben unten. */
+const GESPEICHERT = window.WIDGET_CONFIG || {};
+
+/* Die tatsächlichen Werte setzt starten() ganz am Ende der Datei - erst dort
+   stehen die Sprachtabellen bereit. */
+let SPRACHE = SOURCE_LANGUAGE;
+let THEMA = DEFAULT_THEME;
+let VORDERGRUND = false;
+let RAHMENLOS = false;
+let VERRIEGELT = false;
+let TRANSPARENZ = 0;
+let INTERVALL = INTERVALL_VORGABE;
+let AUTOSTART = false;
+let EINHEIT = "metrisch";
+const FASSUNG = GESPEICHERT.version || "?";
+
+function sprache_erkennen(){
+  const kurz = (navigator.language || SOURCE_LANGUAGE).slice(0,2).toLowerCase();
+  return (kurz === SOURCE_LANGUAGE || TRANSLATIONS[kurz]) ? kurz : SOURCE_LANGUAGE;
+}
+
+/* Übersetzt einen deutschen Quelltext und setzt Platzhalter ein:
+   _("Station ca. {km} km entfernt", {km: 6.3}) */
+function _(text, werte){
+  let s = text;
+  if (SPRACHE !== SOURCE_LANGUAGE){
+    s = (TRANSLATIONS[SPRACHE] || {})[text] || text;
+  }
+  if (werte){
+    for (const name of Object.keys(werte)){
+      s = s.split("{" + name + "}").join(werte[name]);
+    }
+  }
+  return s;
+}
+
+/* Datums- und Zeitformat der jeweiligen Sprache. */
+const LANGUAGE_LOCALES = { de: "de-DE", en: "en-GB" };
+
+function locale(){ return LANGUAGE_LOCALES[SPRACHE] || "de-DE"; }
+
+/* Zahl in der Schreibweise der eingestellten Sprache - im Deutschen also mit
+   Komma. Tausenderpunkte bleiben aus: bei einem Luftdruck von 1027 hPa wären
+   sie eher verwirrend als hilfreich. */
+function zahl(wert, nachkomma){
+  return Number(wert).toLocaleString(locale(), {
+    minimumFractionDigits: nachkomma,
+    maximumFractionDigits: nachkomma,
+    useGrouping: false
+  });
+}
+
+/* ------------------------------------------------------------------------
+   Einheiten
+
+   Der Deutsche Wetterdienst liefert stets metrisch; hier wird nur für die
+   Anzeige umgerechnet. Jede Größe gibt den fertigen Text samt Kürzel zurück,
+   die Temperatur zusätzlich als blanke Zahl - sie steht groß da und trägt ihr
+   Kürzel hochgestellt daneben.
+
+   Ein weiteres System entsteht durch einen weiteren Eintrag mit denselben
+   Feldern; die Beschriftung im Menü kommt aus der Sprachtabelle.
+   ------------------------------------------------------------------------ */
+const EINHEITEN = {
+  metrisch: {
+    temperatur:   c => Math.round(c),
+    temperatur_zeichen: "°C",
+    wind:         k => zahl(Math.round(k), 0) + " km/h",
+    niederschlag: m => zahl(m, 1) + " mm",
+    druck:        h => zahl(Math.round(h), 0) + " hPa",
+    entfernung:   k => zahl(k, 1) + " km"
+  },
+  imperial: {
+    temperatur:   c => Math.round(c * 9 / 5 + 32),
+    temperatur_zeichen: "°F",
+    wind:         k => zahl(Math.round(k * 0.621371), 0) + " mph",
+    niederschlag: m => zahl(m / 25.4, 2) + " in",
+    druck:        h => zahl(h * 0.02953, 2) + " inHg",
+    entfernung:   k => zahl(k * 0.621371, 1) + " mi"
+  }
+};
+
+function einheit(){ return EINHEITEN[EINHEIT] || EINHEITEN.metrisch; }
+
+function thema_anwenden(name){
+  THEMA = THEMES[name] ? name : DEFAULT_THEME;
+  const stil = document.documentElement.style;
+  const palette = THEMES[THEMA];
+  for (const rolle of Object.keys(palette)){
+    stil.setProperty("--" + rolle.toLowerCase().split("_").join("-"), palette[rolle]);
+  }
+}
+
+/* ------------------------------------------------------------------------
+   Brücke zum Programm
+
+   Fensterrahmen, Vordergrund, Transparenz und Position kann nur das Fenster
+   selbst - die Seite meldet sie deshalb an wetter_widget.py. Ohne pywebview
+   (also beim Öffnen im Browser) bleiben diese Aufrufe wirkungslos, die
+   Wetteranzeige funktioniert trotzdem.
+   ------------------------------------------------------------------------ */
+function programm(){
+  try {
+    return (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function einstellungen_speichern(){
+  const api = programm();
+  if (!api) return;
+  try {
+    api.einstellungen_speichern({
+      ort: cityInput.value.trim(),
+      sprache: SPRACHE,
+      theme: THEMA,
+      vordergrund: VORDERGRUND,
+      rahmenlos: RAHMENLOS,
+      verriegelt: VERRIEGELT,
+      transparenz: TRANSPARENZ,
+      intervall: INTERVALL,
+      einheiten: EINHEIT
+    });
+  } catch (e) { /* Speichern ist Beiwerk und darf die Anzeige nicht stören */ }
+}
+
+function vordergrund_setzen(an){
+  VORDERGRUND = !!an;
+  const api = programm();
+  if (api) { try { api.vordergrund_setzen(VORDERGRUND); } catch (e) {} }
+}
+
+function rahmen_setzen(ohne){
+  RAHMENLOS = !!ohne;
+  const api = programm();
+  if (api) { try { api.rahmen_setzen(RAHMENLOS); } catch (e) {} }
+}
+
+function transparenz_setzen(prozent){
+  TRANSPARENZ = prozent;
+  const api = programm();
+  if (api) { try { api.transparenz_setzen(prozent); } catch (e) {} }
+}
+
+/* Der Eintrag im Autostart von Windows liegt in der Registrierung des
+   angemeldeten Benutzers - das Programm trägt ihn ein und wieder aus und
+   meldet zurück, was tatsächlich dabei herauskam. Ist das Eintragen etwa
+   durch Richtlinien gesperrt, bleibt das Häkchen einfach aus. */
+function autostart_setzen(an){
+  const api = programm();
+  if (!api) return;
+  try {
+    Promise.resolve(api.autostart_setzen(!!an)).then(zustand => {
+      AUTOSTART = !!zustand;
+    });
+  } catch (e) {}
+}
+
+function beenden(){
+  const api = programm();
+  if (api) { try { api.beenden(); } catch (e) {} }
+}
+
+/* ------------------------------------------------------------------------
+   Fenster mit der Maus verschieben
+
+   Ohne Rahmen gibt es keine Titelleiste mehr, also wird die Widgetfläche
+   selbst zum Griff. Gemeldet werden die Mauskoordinaten auf dem Bildschirm;
+   den Abstand zur Fensterecke merkt sich das Programm beim Ansetzen, damit
+   das Fenster nicht springt. Ist "Verriegelt" gesetzt, passiert nichts.
+   ------------------------------------------------------------------------ */
+function ziehen_einrichten(){
+  let zieht = false;
+
+  function beweglich(ziel){
+    return !ziel.closest('input, button, select, textarea, a, .menu, .ueber');
+  }
+
+  document.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 || VERRIEGELT || !beweglich(e.target)) return;
+    const api = programm();
+    if (!api) return;
+    zieht = true;
+    try { api.ziehen_beginnen(e.screenX, e.screenY); } catch (err) { zieht = false; }
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!zieht) return;
+    const api = programm();
+    if (api) { try { api.ziehen(e.screenX, e.screenY); } catch (err) {} }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!zieht) return;
+    zieht = false;
+    einstellungen_speichern();
+  });
+}
+
+/* ------------------------------------------------------------------------
+   Selbsttätige Aktualisierung
+
+   Nach jedem Abruf - auch nach einem gescheiterten - wird der nächste neu
+   angesetzt. Dadurch verschiebt eine Aktualisierung von Hand den Takt, statt
+   kurz darauf noch einmal abzufragen.
+   ------------------------------------------------------------------------ */
+let zeitgeber = null;
+
+function takt_neu_setzen(){
+  clearTimeout(zeitgeber);
+  zeitgeber = null;
+  if (INTERVALL > 0){
+    zeitgeber = setTimeout(() => loadWeather(cityInput.value.trim()),
+                           INTERVALL * 60000);
+  }
+}
+
+function intervall_setzen(minuten){
+  INTERVALL = minuten;
+  takt_neu_setzen();
+}
+
+/* ------------------------------------------------------------------------
+   Kontextmenü
+   ------------------------------------------------------------------------ */
+let offeneMenues = [];
+
+function menue_schliessen(){
+  for (const m of offeneMenues) m.remove();
+  offeneMenues = [];
+}
+
+/* Baut ein Menü aus Einträgen:
+     {text}                       - Beschriftung (deutscher Quelltext)
+     {haken: true|false}          - Häkchen davor
+     {punkt: true|false}          - Punkt davor (Auswahl aus mehreren)
+     {unter: [...]}               - Untermenü
+     {tun: function}              - Aufgerufen beim Anklicken
+     {trenner: true}              - waagerechte Linie                       */
+function menue_bauen(eintraege, x, y, anker){
+  const menue = document.createElement('div');
+  menue.className = 'menu';
+
+  for (const eintrag of eintraege){
+    if (eintrag.trenner){
+      const linie = document.createElement('div');
+      linie.className = 'menu-trenner';
+      menue.appendChild(linie);
+      continue;
+    }
+
+    const zeile = document.createElement('div');
+    zeile.className = 'menu-item';
+
+    const marke = document.createElement('span');
+    marke.className = 'haken';
+    marke.textContent = eintrag.haken ? '✓' : (eintrag.punkt ? '•' : '');
+    zeile.appendChild(marke);
+
+    const beschriftung = document.createElement('span');
+    beschriftung.textContent = eintrag.text;
+    zeile.appendChild(beschriftung);
+
+    if (eintrag.unter){
+      const pfeil = document.createElement('span');
+      pfeil.className = 'pfeil';
+      pfeil.textContent = '›';
+      zeile.appendChild(pfeil);
+
+      zeile.addEventListener('mouseenter', () => {
+        while (offeneMenues.length > offeneMenues.indexOf(menue) + 1){
+          offeneMenues.pop().remove();
+        }
+        const platz = zeile.getBoundingClientRect();
+        const eltern = menue.getBoundingClientRect();
+        menue_bauen(eintrag.unter, platz.right - 4, platz.top - 4,
+                    {links: eltern.left, rechts: eltern.right});
+      });
+    } else {
+      zeile.addEventListener('mouseenter', () => {
+        while (offeneMenues.length > offeneMenues.indexOf(menue) + 1){
+          offeneMenues.pop().remove();
+        }
+      });
+      zeile.addEventListener('click', () => {
+        menue_schliessen();
+        if (eintrag.tun) eintrag.tun();
+      });
+    }
+
+    menue.appendChild(zeile);
+  }
+
+  document.body.appendChild(menue);
+  offeneMenues.push(menue);
+
+  // In das Fenster hineinrücken, damit nichts über den Rand hinausragt.
+  // Ein Untermenü, das rechts nicht mehr hinpasst, klappt nach links auf,
+  // statt sich über sein Elternmenü zu legen.
+  const masse = menue.getBoundingClientRect();
+  let links = x;
+  if (anker && x + masse.width > window.innerWidth - 4){
+    links = anker.links - masse.width + 4;
+  }
+  links = Math.max(4, Math.min(links, window.innerWidth - masse.width - 4));
+  const oben = Math.max(4, Math.min(y, window.innerHeight - masse.height - 4));
+  menue.style.left = links + 'px';
+  menue.style.top = oben + 'px';
+  return menue;
+}
+
+function transparenz_eintraege(){
+  return TRANSPARENZSTUFEN.map(stufe => ({
+    text: stufe + " %",
+    punkt: TRANSPARENZ === stufe,
+    tun: () => { transparenz_setzen(stufe); einstellungen_speichern(); }
+  }));
+}
+
+function intervall_beschriftung(minuten){
+  if (minuten === 0) return _("Durch User");
+  if (minuten < 60) return _("alle {zahl} Minuten", {zahl: minuten});
+  if (minuten === 60) return _("stündlich");
+  return _("alle {zahl} Stunden", {zahl: minuten / 60});
+}
+
+function aktualisieren_eintraege(){
+  const eintraege = [
+    { text: _("Jetzt"), tun: () => loadWeather(cityInput.value.trim()) },
+    { trenner: true }
+  ];
+  for (const minuten of INTERVALLE){
+    eintraege.push({
+      text: intervall_beschriftung(minuten),
+      punkt: INTERVALL === minuten,
+      tun: () => { intervall_setzen(minuten); einstellungen_speichern(); }
+    });
+  }
+  return eintraege;
+}
+
+function einheiten_eintraege(){
+  return Object.keys(EINHEITEN).map(name => ({
+    text: _(name),
+    punkt: EINHEIT === name,
+    tun: () => {
+      EINHEIT = name;
+      anzeigen();                 // vorhandene Messwerte genügen
+      einstellungen_speichern();
+    }
+  }));
+}
+
+function sprach_eintraege(){
+  return Object.keys(LANGUAGE_NAMES).map(code => ({
+    text: LANGUAGE_NAMES[code],
+    punkt: SPRACHE === code,
+    tun: () => {
+      SPRACHE = code;
+      oberflaeche_beschriften();
+      einstellungen_speichern();
+      loadWeather(cityInput.value.trim());
+    }
+  }));
+}
+
+function menue_zeigen(x, y){
+  menue_schliessen();
+  menue_bauen([
+    { text: _("Aktualisieren"), unter: aktualisieren_eintraege() },
+    { trenner: true },
+    { text: _("Immer vorn"), haken: VORDERGRUND,
+      tun: () => { vordergrund_setzen(!VORDERGRUND); einstellungen_speichern(); } },
+    { text: _("Rahmenlos"), haken: RAHMENLOS,
+      tun: () => { rahmen_setzen(!RAHMENLOS); einstellungen_speichern(); } },
+    { text: _("Verriegelt"), haken: VERRIEGELT,
+      tun: () => { VERRIEGELT = !VERRIEGELT; einstellungen_speichern(); } },
+    { text: _("Dunkel"), haken: THEMA === "dark",
+      tun: () => { thema_anwenden(THEMA === "dark" ? "light" : "dark"); einstellungen_speichern(); } },
+    { trenner: true },
+    { text: _("Transparenz"), unter: transparenz_eintraege() },
+    { text: _("Einheiten"), unter: einheiten_eintraege() },
+    { text: _("Sprache"), unter: sprach_eintraege() },
+    { trenner: true },
+    { text: _("Mit Windows starten"), haken: AUTOSTART,
+      tun: () => autostart_setzen(!AUTOSTART) },
+    { text: _("Über"), tun: ueber_zeigen },
+    { text: _("Beenden"), tun: beenden }
+  ], x, y);
+}
+
+function menue_einrichten(){
+  document.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    menue_zeigen(e.clientX, e.clientY);
+  });
+  document.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('.menu')) menue_schliessen();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape'){ menue_schliessen(); ueber_schliessen(); }
+  });
+  window.addEventListener('blur', menue_schliessen);
+}
+
+/* ------------------------------------------------------------------------
+   Über dieses Programm
+
+   Lizenz- und Copyrightzeile stehen wortgleich in der Bild-Toolbox und im
+   QR-Code-Generator; der Hinweis auf die KI-Unterstützung gehört überall
+   dorthin, wo der Copyright-Vermerk auftaucht.
+   ------------------------------------------------------------------------ */
+const LIZENZ = "Licensed under MIT License\n"
+             + "Copyright 2026 Alexander Unverhau\n"
+             + "Created with assistance of Claude AI";
+
+function ueber_zeigen(){
+  ueber_schliessen();
+  const tafel = document.createElement('div');
+  tafel.className = 'ueber';
+  tafel.id = 'ueber';
+
+  const teile = [];
+  teile.push('<h1>' + _("Wetter Widget") + '</h1>');
+  teile.push('<div class="fassung">' + _("Fassung {nummer}", {nummer: FASSUNG}) + '</div>');
+  teile.push('<p>' + _("Zeigt die aktuellen Messwerte und die Vorhersage der nächsten "
+    + "Stunden für einen Ort in Deutschland. Farbschema, Sprachumschaltung und "
+    + "Aufbau folgen der Bild-Toolbox und dem QR-Code-Generator.") + '</p>');
+  teile.push('<p>' + _("Alle Einstellungen stehen im Kontextmenü - Rechtsklick auf die "
+    + "Widgetfläche.") + '</p>');
+
+  teile.push('<h2>' + _("Datenquellen") + '</h2>');
+  teile.push('<p>' + _("Messwerte und Vorhersage vom Deutschen Wetterdienst (DWD), "
+    + "abgerufen über die Schnittstelle Bright Sky. Die Ortssuche liefert "
+    + "Open-Meteo. Beide Dienste sind ohne Schlüssel und ohne Anmeldung "
+    + "nutzbar; die Daten des DWD stehen unter der Datenlizenz "
+    + "Deutschland - Namensnennung 2.0.") + '</p>');
+
+  teile.push('<h2>' + _("Lizenz und Copyright") + '</h2>');
+  teile.push('<div class="lizenz">' + LIZENZ + '</div>');
+  teile.push('<p>' + _("Hiermit wird unentgeltlich jeder Person, die eine Kopie dieser "
+    + "Software und der zugehörigen Dokumentation erhält, die Erlaubnis erteilt, "
+    + "sie uneingeschränkt zu nutzen, zu kopieren, zu verändern und "
+    + "weiterzugeben - unter der Bedingung, dass dieser Copyright-Vermerk und "
+    + "der Lizenztext in allen Kopien enthalten bleiben.") + '</p>');
+  teile.push('<p>' + _("Die Software wird ohne jede Gewähr bereitgestellt.") + '</p>');
+
+  tafel.innerHTML = teile.join('');
+
+  const knopf = document.createElement('button');
+  knopf.textContent = _("Schließen");
+  knopf.addEventListener('click', ueber_schliessen);
+  tafel.appendChild(knopf);
+
+  document.body.appendChild(tafel);
+}
+
+function ueber_schliessen(){
+  const tafel = document.getElementById('ueber');
+  if (tafel) tafel.remove();
+}
+
+/* ------------------------------------------------------------------------
+   Wetteranzeige
+   ------------------------------------------------------------------------ */
+const cityInput = document.getElementById('cityInput');
+const searchBtn = document.getElementById('searchBtn');
+const content = document.getElementById('content');
+
+/* Beschriftungen, die nicht bei jedem Abruf neu entstehen. */
+function oberflaeche_beschriften(){
+  document.documentElement.lang = SPRACHE;
+  document.getElementById('sourceLine').textContent =
+    _("Daten: DWD über Brightsky · nur Deutschland");
+  cityInput.placeholder = _("Ort eingeben, z. B. Dresden");
+  searchBtn.textContent = _("Suchen");
+}
+
+function renderMessage(text, isError){
+  content.innerHTML = `<div class="msg${isError ? ' error' : ''}">${text}</div>`;
+}
+
+function windDirection(deg){
+  if (deg === null || deg === undefined) return '–';
+  const dirs = [_("N"), _("NO"), _("O"), _("SO"), _("S"), _("SW"), _("W"), _("NW")];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+function formatTime(iso){
+  return new Date(iso).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatHour(iso){
+  return String(new Date(iso).getHours()).padStart(2, '0') + 'h';
+}
+
+/* Einmal nachgeschlagene Orte werden behalten: bei stündlicher
+   Aktualisierung wäre es unnötig, für denselben Ort jedes Mal wieder die
+   Ortssuche zu bemühen. Der Schlüssel enthält die Sprache, weil der
+   zurückgegebene Ortsname von ihr abhängt. */
+const ORTSSPEICHER = {};
+
+async function geocode(name){
+  const schluessel = SPRACHE + "|" + name.toLowerCase();
+  if (ORTSSPEICHER[schluessel]) return ORTSSPEICHER[schluessel];
+
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=${SPRACHE}&country=DE`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(_("Ortssuche nicht erreichbar"));
+  const data = await res.json();
+  if (!data.results || data.results.length === 0) throw new Error(_("Ort in Deutschland nicht gefunden"));
+  const r = data.results[0];
+  const ort = { lat: r.latitude, lon: r.longitude, name: r.name };
+  ORTSSPEICHER[schluessel] = ort;
+  return ort;
+}
+
+/* Zuletzt abgerufene Messwerte. Ein Wechsel der Einheiten zeichnet daraus
+   neu, statt den Wetterdienst noch einmal zu behelligen. */
+let LETZTE_DATEN = null;
+
+function anzeigen(){
+  if (!LETZTE_DATEN) return;
+  const { loc, w, entfernung, kommend } = LETZTE_DATEN;
+  const e = einheit();
+
+  const conditionMap = {
+    'clear-day': "Klar", 'clear-night': "Klar",
+    'partly-cloudy-day': "Leicht bewölkt", 'partly-cloudy-night': "Leicht bewölkt",
+    'cloudy': "Bewölkt", 'fog': "Nebel", 'wind': "Windig",
+    'rain': "Regen", 'sleet': "Schneeregen", 'snow': "Schnee",
+    'hail': "Hagel", 'thunderstorm': "Gewitter", 'dry': "Trocken"
+  };
+  const conditionText = conditionMap[w.icon] ? _(conditionMap[w.icon]) : (w.condition || '–');
+
+  // Die Balken werden aus den Rohwerten berechnet: eine Umrechnung in
+  // Fahrenheit verschiebt alle Werte gleichmäßig und ändert am Bild nichts.
+  const maxTemp = kommend.length ? Math.max(...kommend.map(h => h.temperature)) : w.temperature;
+  const minTemp = kommend.length ? Math.min(...kommend.map(h => h.temperature)) : w.temperature;
+  const spanne = Math.max(maxTemp - minTemp, 1);
+
+  const forecastHtml = kommend.map(h => {
+    const fillPct = Math.max(8, Math.round(((h.temperature - minTemp) / spanne) * 100));
+    return `
+      <div class="fc-item">
+        <div class="fc-time">${formatHour(h.timestamp)}</div>
+        <div class="fc-bar-track"><div class="fc-bar-fill" style="height:${fillPct}%"></div></div>
+        <div class="fc-temp">${e.temperatur(h.temperature)}°</div>
+      </div>
+    `;
+  }).join('');
+
+  content.innerHTML = `
+    <div class="station-line">${entfernung !== null
+      ? _("Station ca. {entfernung} entfernt", {entfernung: e.entfernung(entfernung)}) : ''}</div>
+    <div class="city-name">${loc.name}</div>
+
+    <div class="main-readout">
+      <div class="temp">${e.temperatur(w.temperature)}<sup>${e.temperatur_zeichen}</sup></div>
+      <div class="condition-col">
+        <div class="condition-text">${conditionText}</div>
+        <div class="updated">${_("Stand {zeit} Uhr", {zeit: formatTime(w.timestamp)})}</div>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-label">${_("Wind")}</div>
+        <div class="metric-value accent">${w.wind_speed != null
+          ? e.wind(w.wind_speed) + ' ' + windDirection(w.wind_direction) : '–'}</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">${_("Niederschlag")}</div>
+        <div class="metric-value accent">${e.niederschlag(w.precipitation != null ? w.precipitation : 0)}</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">${_("Luftdruck")}</div>
+        <div class="metric-value">${w.pressure_msl ? e.druck(w.pressure_msl) : '–'}</div>
+      </div>
+    </div>
+
+    ${kommend.length ? `<div class="forecast">${forecastHtml}</div>` : ''}
+  `;
+}
+
+async function loadWeather(cityName){
+  if (!cityName) return;
+  renderMessage(_("Lade Wetterdaten …"), false);
+  try {
+    const loc = await geocode(cityName);
+
+    const currentUrl = `https://api.brightsky.dev/current_weather?lat=${loc.lat}&lon=${loc.lon}`;
+    const currentRes = await fetch(currentUrl);
+    if (!currentRes.ok) throw new Error(_("Wetterdienst nicht erreichbar"));
+    const currentData = await currentRes.json();
+    const w = currentData.weather;
+    const entfernung = currentData.sources && currentData.sources[0]
+      ? Math.round(currentData.sources[0].distance / 100) / 10
+      : null;
+
+    const jetzt = new Date();
+    const heute = jetzt.toISOString().slice(0,10);
+    const forecastUrl = `https://api.brightsky.dev/weather?lat=${loc.lat}&lon=${loc.lon}&date=${heute}`;
+    const forecastRes = await fetch(forecastUrl);
+    const forecastData = forecastRes.ok ? await forecastRes.json() : null;
+
+    let kommend = [];
+    if (forecastData && forecastData.weather) {
+      kommend = forecastData.weather
+        .filter(h => new Date(h.timestamp) > jetzt)
+        .slice(0, 5);
+    }
+
+    LETZTE_DATEN = { loc, w, entfernung, kommend };
+    anzeigen();
+
+    einstellungen_speichern();   // nur ein Ort, der auch gefunden wurde
+  } catch (err) {
+    renderMessage(_("Fehler: {text}", {text: err.message}), true);
+  } finally {
+    takt_neu_setzen();
+  }
+}
+
+searchBtn.addEventListener('click', () => loadWeather(cityInput.value.trim()));
+cityInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') searchBtn.click();
+});
+
+function starten(){
+  SPRACHE = GESPEICHERT.sprache || sprache_erkennen();
+  // Rahmen, Vordergrund und Transparenz hat das Programm beim Öffnen des
+  // Fensters bereits gesetzt - hier wird der Stand nur übernommen.
+  VORDERGRUND = !!GESPEICHERT.vordergrund;
+  RAHMENLOS = !!GESPEICHERT.rahmenlos;
+  VERRIEGELT = !!GESPEICHERT.verriegelt;
+  TRANSPARENZ = TRANSPARENZSTUFEN.includes(GESPEICHERT.transparenz)
+    ? GESPEICHERT.transparenz : 0;
+  INTERVALL = INTERVALLE.includes(GESPEICHERT.intervall)
+    ? GESPEICHERT.intervall : INTERVALL_VORGABE;
+  AUTOSTART = !!GESPEICHERT.autostart;
+  EINHEIT = EINHEITEN[GESPEICHERT.einheiten] ? GESPEICHERT.einheiten : "metrisch";
+
+  thema_anwenden(GESPEICHERT.theme || DEFAULT_THEME);
+  oberflaeche_beschriften();
+  menue_einrichten();
+  ziehen_einrichten();
+  cityInput.value = GESPEICHERT.ort || "Berlin";
+  loadWeather(cityInput.value);
+
+  // Beim Öffnen bekommt das Ortsfeld den Tastaturfokus und stellt seinen
+  // Inhalt blau hinterlegt dar. Für ein Widget, das nur dasteht, ist das
+  // unruhig - also einmal abwählen, sofern der Anwender nicht selbst
+  // hineingeklickt hat.
+  setTimeout(() => {
+    if (document.activeElement === cityInput) cityInput.blur();
+  }, 200);
+}
+
+/* ------------------------------------------------------------------------
+   SPRACHTABELLE / LANGUAGE TABLE
+
+   Quellsprache ist Deutsch - der deutsche Text im Code ist zugleich der
+   Schlüssel. Eine weitere Sprache kommt in drei Schritten dazu:
+     1. Kürzel und Anzeigename in LANGUAGE_NAMES eintragen,
+        z. B.  "fr": "Français"
+     2. In TRANSLATIONS einen Eintrag "fr": { ... } anlegen und die
+        gewünschten Zeilen übersetzen.
+     3. Bei Bedarf das Zeitformat in LANGUAGE_LOCALES ergänzen.
+
+   Nicht übersetzte Zeilen erscheinen automatisch auf Deutsch, eine
+   unvollständige Tabelle ist also unproblematisch. Platzhalter in
+   geschweiften Klammern - {km}, {zeit}, {text} - müssen in der Übersetzung
+   unverändert vorkommen; ihre Stellung im Satz ist frei.
+   ------------------------------------------------------------------------ */
+var LANGUAGE_NAMES = {
+  "de": "Deutsch",
+  "en": "English"
+};
+
+var TRANSLATIONS = {
+  "en": {
+    // --- Kontextmenü ----------------------------------------------------
+    "Aktualisieren": "Refresh",
+    "Jetzt": "Now",
+    "Durch User": "By user",
+    "alle {zahl} Minuten": "every {zahl} minutes",
+    "stündlich": "hourly",
+    "alle {zahl} Stunden": "every {zahl} hours",
+    "Mit Windows starten": "Start with Windows",
+    "Über": "About",
+    "Schließen": "Close",
+    "Immer vorn": "Always on top",
+    "Rahmenlos": "Frameless",
+    "Verriegelt": "Locked",
+    "Dunkel": "Dark",
+    "Transparenz": "Transparency",
+    "Einheiten": "Units",
+    "metrisch": "Metric",
+    "imperial": "Imperial",
+    "Sprache": "Language",
+    "Beenden": "Quit",
+
+    // --- Bedienung ------------------------------------------------------
+    "Ort eingeben, z. B. Dresden": "Enter a place, e.g. Dresden",
+    "Suchen": "Search",
+    "Daten: DWD über Brightsky · nur Deutschland":
+      "Data: DWD via Brightsky · Germany only",
+
+    // --- Meldungen ------------------------------------------------------
+    "Lade Wetterdaten …": "Loading weather data …",
+    "Fehler: {text}": "Error: {text}",
+    "Ortssuche nicht erreichbar": "Place search unavailable",
+    "Ort in Deutschland nicht gefunden": "Place not found in Germany",
+    "Wetterdienst nicht erreichbar": "Weather service unavailable",
+
+    // --- Messwerte ------------------------------------------------------
+    "Station ca. {entfernung} entfernt": "Station approx. {entfernung} away",
+    "Stand {zeit} Uhr": "As of {zeit}",
+    "Wind": "Wind",
+    "Niederschlag": "Precipitation",
+    "Luftdruck": "Pressure",
+
+    // --- Himmelsrichtungen ----------------------------------------------
+    "N": "N", "NO": "NE", "O": "E", "SO": "SE",
+    "S": "S", "SW": "SW", "W": "W", "NW": "NW",
+
+    // --- Wetterlagen ----------------------------------------------------
+    "Klar": "Clear",
+    "Leicht bewölkt": "Partly cloudy",
+    "Bewölkt": "Cloudy",
+    "Nebel": "Fog",
+    "Windig": "Windy",
+    "Regen": "Rain",
+    "Schneeregen": "Sleet",
+    "Schnee": "Snow",
+    "Hagel": "Hail",
+    "Gewitter": "Thunderstorm",
+    "Trocken": "Dry",
+
+    // --- Über dieses Programm -------------------------------------------
+    "Wetter Widget": "Weather Widget",
+    "Fassung {nummer}": "Version {nummer}",
+    "Zeigt die aktuellen Messwerte und die Vorhersage der nächsten Stunden für einen Ort in Deutschland. Farbschema, Sprachumschaltung und Aufbau folgen der Bild-Toolbox und dem QR-Code-Generator.":
+      "Shows the current readings and the forecast for the next few hours for a place in Germany. Colour scheme, language switching and layout follow the Bild-Toolbox and the QR code generator.",
+    "Alle Einstellungen stehen im Kontextmenü - Rechtsklick auf die Widgetfläche.":
+      "All settings live in the context menu - right-click the widget surface.",
+    "Datenquellen": "Data sources",
+    "Messwerte und Vorhersage vom Deutschen Wetterdienst (DWD), abgerufen über die Schnittstelle Bright Sky. Die Ortssuche liefert Open-Meteo. Beide Dienste sind ohne Schlüssel und ohne Anmeldung nutzbar; die Daten des DWD stehen unter der Datenlizenz Deutschland - Namensnennung 2.0.":
+      "Readings and forecast from Germany's national weather service (DWD), retrieved through the Bright Sky interface. Place search is provided by Open-Meteo. Both services work without a key and without registration; the DWD data is published under the Data Licence Germany - Attribution 2.0.",
+    "Lizenz und Copyright": "Licence and copyright",
+    "Hiermit wird unentgeltlich jeder Person, die eine Kopie dieser Software und der zugehörigen Dokumentation erhält, die Erlaubnis erteilt, sie uneingeschränkt zu nutzen, zu kopieren, zu verändern und weiterzugeben - unter der Bedingung, dass dieser Copyright-Vermerk und der Lizenztext in allen Kopien enthalten bleiben.":
+      "Permission is hereby granted, free of charge, to any person obtaining a copy of this software and its associated documentation, to use, copy, modify and distribute it without restriction - provided that this copyright notice and the licence text remain in all copies.",
+    "Die Software wird ohne jede Gewähr bereitgestellt.":
+      "The software is provided without any warranty."
+  }
+};
+
+starten();      // erst jetzt sind LANGUAGE_NAMES und TRANSLATIONS belegt
+</script>
+
+</body>
+</html>
