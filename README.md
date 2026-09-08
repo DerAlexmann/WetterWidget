@@ -9,6 +9,11 @@ Microsoft-WebView2-Komponente läuft - es wird **kein externer Browser**
 gestartet und nichts installiert. Deutsch und Englisch, helles und dunkles
 Farbschema, metrische und imperiale Einheiten.
 
+Zwei Darstellungen: als **Karte** oder als einzeilige **Leiste** für den
+oberen oder unteren Bildschirmrand.
+
+![Die Leiste, rahmenlos](docs/leiste-rahmenlos.png)
+
 ![Das Widget im dunklen Schema](docs/widget-dunkel.png)
 
 | | |
@@ -51,6 +56,7 @@ Im Fenster stehen nur das Ortsfeld und die Anzeige. Alles andere liegt im
 | Menüpunkt | Wirkung |
 |---|---|
 | Aktualisieren ▸ | *Jetzt* abrufen, und in welchem Abstand von selbst |
+| Darstellung ▸ | Karte oder Leiste |
 | Immer vorn | Fenster über allen anderen halten |
 | Rahmenlos | Windows-Rahmen samt Titelleiste abnehmen |
 | Verriegelt | Fenster gegen versehentliches Verschieben sichern |
@@ -74,6 +80,20 @@ Aktualisieren von Hand verschiebt ihn also. Der einmal nachgeschlagene Ort
 wird behalten, sodass die Ortssuche nicht bei jedem Durchgang erneut
 befragt wird.
 
+**Darstellung** wechselt zwischen der Karte und der Leiste. Die Leiste
+zeigt dasselbe in einer Zeile - Ort, Temperatur, Wetterlage, die drei
+Messwerte und die nächsten Stunden - und ist damit flach genug für den
+oberen oder unteren Bildschirmrand. Entfernung der Messstation und der
+ausführliche Quellenhinweis treten dabei zurück; beides steht weiterhin
+unter *Über*.
+
+Jede Darstellung führt ihre **eigene Lage**: die Leiste steht meist am Rand,
+die Karte irgendwo daneben, und beim Umschalten findet jede an ihren Platz
+zurück.
+
+**Über** öffnet sich in einem eigenen Fenster. In der Leiste wäre für den
+Text kein Platz, und auch als Karte liest er sich dort besser.
+
 **Transparenz** endet bei 90 % und nicht bei 100 %: ein vollständig
 durchsichtiges Fenster wäre unsichtbar und nur noch über die Taskleiste zu
 fassen. Wer die letzte Stufe dennoch möchte, ergänzt sie in
@@ -92,7 +112,10 @@ der Rahmen kommt außen hinzu und geht außen weg, der Inhalt verrutscht nicht.
 ## Was sich das Programm merkt
 
 Beim Beenden - und kurz nach jedem Verschieben oder Verändern der Größe -
-schreibt das Widget seinen Zustand in `wetter-widget.json` **neben die .exe**:
+schreibt das Widget seinen Zustand in `wetter-widget.json` **neben die .exe**.
+Bei `fenster` und `leiste` steht dabei die **Anzeigefläche** in Punkten, nicht
+das Außenmaß des Fensters: so bedeutet der Wert mit Rahmen dasselbe wie ohne
+und gilt bei jeder Bildschirmskalierung.
 
 | Eintrag | Inhalt |
 |---|---|
@@ -105,7 +128,9 @@ schreibt das Widget seinen Zustand in `wetter-widget.json` **neben die .exe**:
 | `transparenz` | 0 bis 90 |
 | `einheiten` | `metrisch` oder `imperial` |
 | `intervall` | Minuten bis zur nächsten Aktualisierung, 0 = nur von Hand |
-| `fenster` | Position und Größe |
+| `darstellung` | `karte` oder `leiste` |
+| `fenster` | Lage der Karte |
+| `leiste` | Lage der Leiste |
 
 Beim nächsten Start steht das Fenster wieder an seinem Platz und in seinem
 Zustand. Ist der Bildschirm inzwischen weg oder kleiner geworden, rückt das

@@ -44,12 +44,19 @@ if sys.platform == "win32":
 import webview  # noqa: E402  - erst nach dem DPI-Setup importieren
 
 PROGRAMM = "Wetter Widget"
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 CONFIG_NAME = "wetter-widget.json"
+UEBER_TITEL = "Über " + PROGRAMM
 
-FENSTER_BREITE = 420
-FENSTER_HOEHE = 465
-MINDESTGROESSE = (340, 300)
+# Darstellungen und die Anzeigefläche, die jede von ihnen braucht - in
+# Punkten, also unabhängig von der Bildschirmskalierung. Gemeint ist die
+# Fläche *innerhalb* des Fensters; der Rahmen kommt aussen hinzu.
+DARSTELLUNGEN = ("karte", "leiste")
+GROESSE = {"karte": (400, 428), "leiste": (780, 76)}
+LAGE_SCHLUESSEL = {"karte": "fenster", "leiste": "leiste"}
+DEFAULT_DARSTELLUNG = "karte"
+
+MINDESTGROESSE = (320, 56)
 
 # Transparenzstufen, die das Kontextmenü anbietet (Prozent). 100 % fehlt mit
 # Absicht: das Fenster wäre unsichtbar und nur über die Taskleiste zu fassen.
@@ -113,6 +120,20 @@ def load_config() -> dict:
         return daten if isinstance(daten, dict) else {}
     except (OSError, ValueError):
         return {}
+
+
+# Aufrufe aus der Seite laufen jeweils in einem eigenen Thread. Ohne Sperre
+# könnten zwei davon gleichzeitig die ganze Datei lesen, jeder seinen Teil
+# ändern und beide zurückschreiben - die Änderung des einen wäre verloren.
+_EINSTELLUNGEN_SPERRE = threading.RLock()
+
+
+def config_aendern(aendern) -> bool:
+    """Einstellungen unter der Sperre lesen, ändern und zurückschreiben."""
+    with _EINSTELLUNGEN_SPERRE:
+        daten = load_config()
+        aendern(daten)
+        return save_config(daten)
 
 
 def save_config(daten: dict) -> bool:
@@ -218,7 +239,8 @@ def seite_bauen(einstellungen: dict) -> str:
         html = datei.read()
 
     startwerte = {name: einstellungen[name]
-                  for name in ("ort", "sprache", "theme", "einheiten")
+                  for name in ("ort", "sprache", "theme", "einheiten",
+                               "darstellung")
                   if isinstance(einstellungen.get(name), str)}
     for name in ("vordergrund", "rahmenlos", "verriegelt"):
         startwerte[name] = bool(einstellungen.get(name))
@@ -319,20 +341,33 @@ def bildschirm_skalierung() -> float:
     return 1.0
 
 
-def sichtbare_lage(lage: dict):
+def fenster_dpi(griff) -> int:
+    """Punktdichte des Fensters; 96 entspricht 100 % Skalierung."""
+    try:
+        dpi = int(_user32().GetDpiForWindow(griff))
+        return dpi if dpi > 0 else 96
+    except (AttributeError, OSError, ValueError):
+        return 96
+
+
+def sichtbare_lage(lage: dict, vorgabe=None):
     """Gespeicherte Fensterlage prüfen und nötigenfalls zurechtrücken.
 
     Wird ein Bildschirm abgemeldet oder die Auflösung kleiner, läge das
     Fenster sonst außerhalb und wäre nicht mehr zu greifen. Die Werte werden
     deshalb in die vorhandene Arbeitsfläche geschoben.
 
+    Fehlt in der gespeicherten Lage ein Maß, tritt `vorgabe` an seine Stelle -
+    die Größe der jeweiligen Darstellung, die nur der Aufrufer kennt.
+
     webview.screens meldet physische Pixel, Fensterkoordinaten sind dagegen
     skalierungsunabhängige Punkte - daher die Division durch die Skalierung.
     """
+    vorgabe = vorgabe or GROESSE[DEFAULT_DARSTELLUNG]
     try:
         x, y = int(lage["x"]), int(lage["y"])
-        breite = max(MINDESTGROESSE[0], int(lage.get("breite", FENSTER_BREITE)))
-        hoehe = max(MINDESTGROESSE[1], int(lage.get("hoehe", FENSTER_HOEHE)))
+        breite = max(MINDESTGROESSE[0], int(lage.get("breite", vorgabe[0])))
+        hoehe = max(MINDESTGROESSE[1], int(lage.get("hoehe", vorgabe[1])))
     except (KeyError, TypeError, ValueError):
         return None
 
@@ -355,7 +390,7 @@ def sichtbare_lage(lage: dict):
 
 
 class Fensterablage:
-    """Schreibt Position und Größe des Fensters in die Einstellungen.
+    """Schreibt Position und Anzeigefläche des Fensters in die Einstellungen.
 
     Die Ereignisse moved und resized feuern während des Ziehens fortlaufend.
     Statt bei jedem Pixel zu speichern, wird der Schreibvorgang gesammelt und
@@ -367,21 +402,21 @@ class Fensterablage:
     Fenster aber nicht am Verschieben hindern - dort schnappt es nach dem
     Loslassen an seinen Platz zurück.
 
-    Gespeichert wird stets die Größe des Fensters *mit* Rahmen. Ohne Rahmen
-    lässt sich das Fenster ohnehin nicht in der Größe ändern, und pywebview
-    meldet dann ein anderes Maß, als es beim nächsten Erzeugen erwartet -
-    übernähme man es, schrumpfte das Widget bei jedem Neustart ein Stück.
+    Gespeichert wird die **Anzeigefläche** in Punkten, nicht das Außenmaß des
+    Fensters. Nur so bedeutet der Wert in jeder Lage dasselbe: mit Rahmen wie
+    ohne, bei jeder Bildschirmskalierung. Jede Darstellung führt dabei ihre
+    eigene Lage - die Leiste steht am Bildschirmrand, die Karte anderswo.
     """
 
     VERZOEGERUNG = 0.4                      # Sekunden Ruhe vor dem Schreiben
 
-    def __init__(self, fenster):
+    def __init__(self, fenster, api):
         self.fenster = fenster
+        self.api = api
         self.timer = None
         self.sperre = threading.Lock()
         self.verriegelt = False
-        self.rahmenlos = False
-        self.rahmengroesse = None           # Maß mit Rahmen, während er fehlt
+        self.modus = DEFAULT_DARSTELLUNG
         self.lage = None                    # zuletzt gültige Lage
 
     def merken(self, *_args):
@@ -393,12 +428,14 @@ class Fensterablage:
             self.timer.start()
 
     def _lage_lesen(self):
+        flaeche = self.api.client_lesen()
+        if flaeche is None:
+            return None                     # Fenster ist bereits geschlossen
         try:
             return {"x": int(self.fenster.x), "y": int(self.fenster.y),
-                    "breite": int(self.fenster.width),
-                    "hoehe": int(self.fenster.height)}
+                    "breite": flaeche[0], "hoehe": flaeche[1]}
         except Exception:
-            return None                     # Fenster ist bereits geschlossen
+            return None
 
     def schreiben(self, *_args):
         with self.sperre:
@@ -418,12 +455,8 @@ class Fensterablage:
                 return
 
         self.lage = lage
-        daten = load_config()
-        if self.rahmenlos and self.rahmengroesse is not None:
-            lage = dict(lage)
-            lage["breite"], lage["hoehe"] = self.rahmengroesse
-        daten["fenster"] = lage
-        save_config(daten)
+        schluessel = LAGE_SCHLUESSEL[self.modus]
+        config_aendern(lambda daten: daten.__setitem__(schluessel, lage))
 
 
 class Api:
@@ -438,12 +471,13 @@ class Api:
 
     # Welche Werte gültig sind, prüft die Oberfläche - sie führt die
     # Tabellen für Farbschemata, Sprachen und Einheiten.
-    TEXTFELDER = ("ort", "sprache", "theme", "einheiten")
+    TEXTFELDER = ("ort", "sprache", "theme", "einheiten", "darstellung")
     SCHALTER = ("vordergrund", "rahmenlos", "verriegelt")
 
     def __init__(self, ablage=None):
         self._fenster = None                # wird nach create_window gesetzt
         self._ablage = ablage
+        self._ueber = None                  # Fenster von "Über", falls offen
         self._hwnd = 0
         self._griff = None                  # Abstand Mauszeiger -> Fensterecke
 
@@ -453,22 +487,23 @@ class Api:
         """Übernimmt die Werte, die die Oberfläche verwaltet."""
         if not isinstance(daten, dict):
             return False
-        gespeichert = load_config()
-        for name in self.TEXTFELDER:
-            wert = daten.get(name)
-            if isinstance(wert, str) and len(wert) <= 120:
-                gespeichert[name] = wert
-        for name in self.SCHALTER:
-            if name in daten:
-                gespeichert[name] = bool(daten[name])
-        if daten.get("transparenz") in TRANSPARENZSTUFEN:
-            gespeichert["transparenz"] = int(daten["transparenz"])
-        if daten.get("intervall") in INTERVALLE:
-            gespeichert["intervall"] = int(daten["intervall"])
-        if self._ablage is not None:
-            self._ablage.verriegelt = bool(gespeichert.get("verriegelt"))
-            self._ablage.rahmenlos = bool(gespeichert.get("rahmenlos"))
-        return save_config(gespeichert)
+
+        def uebernehmen(gespeichert):
+            for name in self.TEXTFELDER:
+                wert = daten.get(name)
+                if isinstance(wert, str) and len(wert) <= 120:
+                    gespeichert[name] = wert
+            for name in self.SCHALTER:
+                if name in daten:
+                    gespeichert[name] = bool(daten[name])
+            if daten.get("transparenz") in TRANSPARENZSTUFEN:
+                gespeichert["transparenz"] = int(daten["transparenz"])
+            if daten.get("intervall") in INTERVALLE:
+                gespeichert["intervall"] = int(daten["intervall"])
+            if self._ablage is not None:
+                self._ablage.verriegelt = bool(gespeichert.get("verriegelt"))
+
+        return config_aendern(uebernehmen)
 
     # -- Fenster ---------------------------------------------------------
 
@@ -535,20 +570,6 @@ class Api:
         if not hwnd:
             return False
 
-        # Das Maß mit Rahmen festhalten, solange es noch abzulesen ist: nur
-        # damit lässt sich das Fenster beim nächsten Start wieder in dieser
-        # Größe erzeugen.
-        if self._ablage is not None:
-            if rahmenlos:
-                if self._ablage.rahmengroesse is None:
-                    try:
-                        self._ablage.rahmengroesse = (int(self._fenster.width),
-                                                      int(self._fenster.height))
-                    except Exception:
-                        pass
-            else:
-                self._ablage.rahmengroesse = None
-
         try:
             from ctypes import wintypes
             u = _user32()
@@ -570,8 +591,6 @@ class Api:
             else:                       # Maß nicht bestimmbar: nur neu zeichnen
                 u.SetWindowPos(griff, None, 0, 0, 0, 0,
                                SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED)
-            if self._ablage is not None:
-                self._ablage.rahmenlos = bool(rahmenlos)
             return True
         except Exception:
             return False
@@ -627,6 +646,125 @@ class Api:
         """Widget in den Autostart von Windows eintragen oder daraus lösen."""
         return autostart_setzen(bool(an))
 
+    # -- Anzeigefläche und Darstellung -----------------------------------
+
+    def client_lesen(self):
+        """Anzeigefläche in Punkten, oder None bei geschlossenem Fenster."""
+        hwnd = self._fensterhandle()
+        if not hwnd:
+            return None
+        try:
+            from ctypes import wintypes
+            griff = wintypes.HWND(hwnd)
+            innen = wintypes.RECT()
+            if not _user32().GetClientRect(griff, ctypes.byref(innen)):
+                return None
+            dpi = fenster_dpi(griff)
+            return (int(round(innen.right * 96 / dpi)),
+                    int(round(innen.bottom * 96 / dpi)))
+        except Exception:
+            return None
+
+    def client_setzen(self, breite, hoehe):
+        """Fenster so bemessen, dass die Anzeigefläche genau so groß wird.
+
+        Der Rahmen wird dazugerechnet, nicht abgezogen - deshalb stimmt das
+        Maß mit und ohne Rahmen und bei jeder Bildschirmskalierung.
+        """
+        hwnd = self._fensterhandle()
+        if not hwnd:
+            return False
+        try:
+            from ctypes import wintypes
+            u = _user32()
+            griff = wintypes.HWND(hwnd)
+            dpi = fenster_dpi(griff)
+            aussen = wintypes.RECT(0, 0,
+                                   int(round(breite * dpi / 96)),
+                                   int(round(hoehe * dpi / 96)))
+            stil = u.GetWindowLongW(griff, GWL_STYLE)
+            exstil = u.GetWindowLongW(griff, GWL_EXSTYLE)
+            if not self._aussenmass(aussen, stil, exstil, griff):
+                return False
+            return bool(u.SetWindowPos(
+                griff, None, 0, 0,
+                aussen.right - aussen.left, aussen.bottom - aussen.top,
+                SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE))
+        except Exception:
+            return False
+
+    def darstellung_setzen(self, name):
+        """Zwischen Karte und Leiste umschalten.
+
+        Jede Darstellung führt ihre eigene Lage: die Leiste steht meist am
+        oberen oder unteren Bildschirmrand, die Karte irgendwo daneben. Beim
+        Wechsel wird die bisherige Lage gesichert und die des Ziels geholt.
+        """
+        if name not in DARSTELLUNGEN or self._ablage is None:
+            return False
+        if name == self._ablage.modus:
+            return True
+
+        # Sichern und Nachschlagen gehören zusammen: käme dazwischen ein
+        # anderer Aufruf aus der Seite, läse dieser Zwischenstände.
+        with _EINSTELLUNGEN_SPERRE:
+            self._ablage.schreiben()        # Lage der bisherigen Darstellung
+            self._ablage.modus = name
+            gespeichert = load_config().get(LAGE_SCHLUESSEL[name]) or {}
+        lage = sichtbare_lage(gespeichert, GROESSE[name]) or {}
+
+        breite = lage.get("breite", GROESSE[name][0])
+        hoehe = lage.get("hoehe", GROESSE[name][1])
+        self.client_setzen(breite, hoehe)
+
+        if "x" in lage and "y" in lage:
+            ziel = (lage["x"], lage["y"])
+        else:
+            # Für diese Darstellung ist noch keine Lage bekannt: das Fenster
+            # bleibt, wo es ist - nur muss es dort auch hinpassen. Die Leiste
+            # ist deutlich breiter als die Karte und ragte sonst über den
+            # Bildschirmrand hinaus, wenn die Karte rechts aussen stand.
+            jetzt = self._ablage._lage_lesen() or {}
+            gerueckt = sichtbare_lage({"x": jetzt.get("x", 0), "y": jetzt.get("y", 0),
+                                       "breite": breite, "hoehe": hoehe},
+                                      (breite, hoehe))
+            ziel = (gerueckt["x"], gerueckt["y"]) if gerueckt else None
+
+        if ziel is not None:
+            try:
+                self._fenster.move(ziel[0], ziel[1])
+            except Exception:
+                pass
+        self._ablage.lage = self._ablage._lage_lesen()
+        return True
+
+    # -- Über dieses Programm --------------------------------------------
+
+    def ueber_fenster(self, html):
+        """Zeigt "Über" in einem eigenen Fenster.
+
+        In der Leiste wäre für den Text kein Platz, und auch als Karte liest
+        es sich in einem eigenen Fenster besser. Ist es bereits offen, wird
+        es nur nach vorn geholt.
+        """
+        if not isinstance(html, str) or len(html) > 200000:
+            return False
+        try:
+            if self._ueber is not None and self._ueber in webview.windows:
+                self._ueber.show()
+                return True
+        except Exception:
+            pass
+        try:
+            self._ueber = webview.create_window(
+                UEBER_TITEL, html=html, width=470, height=560,
+                min_size=(360, 320), background_color=FENSTERFARBE[
+                    load_config().get("theme") if load_config().get("theme")
+                    in FENSTERFARBE else DEFAULT_THEME])
+            return True
+        except Exception:
+            return False
+
     def beenden(self):
         """Widget schließen - ohne Titelleiste der einzige Weg im Fenster."""
         try:
@@ -650,36 +788,42 @@ def main():
     if transparenz not in TRANSPARENZSTUFEN:
         transparenz = 0
 
+    darstellung = einstellungen.get("darstellung")
+    if darstellung not in DARSTELLUNGEN:
+        darstellung = DEFAULT_DARSTELLUNG
+
     rahmenlos = bool(einstellungen.get("rahmenlos"))
-    lage = sichtbare_lage(einstellungen.get("fenster") or {}) or {}
+    lage = sichtbare_lage(einstellungen.get(LAGE_SCHLUESSEL[darstellung]) or {},
+                          GROESSE[darstellung]) or {}
+    breite, hoehe = GROESSE[darstellung]
+    breite, hoehe = lage.get("breite", breite), lage.get("hoehe", hoehe)
     autostart_nachfuehren()
 
     api = Api()
-    # Das Fenster entsteht immer mit Rahmen: nur dann trifft pywebview die
-    # Anzeigefläche genau. Wird rahmenlos gewünscht, nimmt rahmen_setzen()
-    # den Rahmen ab, solange das Fenster noch verborgen ist - die Fläche
-    # bleibt dabei gleich groß und es blitzt keine Titelleiste auf.
+    # Das Fenster entsteht verborgen und mit Rahmen. Erst wenn die Seite
+    # steht, bekommt es seine Gestalt: Rahmen ab, Anzeigefläche genau
+    # bemessen, an seinen Platz gerückt - und dann wird es gezeigt. So blitzt
+    # weder eine Titelleiste noch eine falsche Größe auf, und pywebviews
+    # eigene Maße spielen keine Rolle mehr.
     fenster = webview.create_window(
         PROGRAMM,
         html=seite_bauen(einstellungen),
         js_api=api,
-        width=lage.get("breite", FENSTER_BREITE),
-        height=lage.get("hoehe", FENSTER_HOEHE),
-        x=lage.get("x"),
-        y=lage.get("y"),
+        width=breite + 40, height=hoehe + 60,
+        x=lage.get("x"), y=lage.get("y"),
         min_size=MINDESTGROESSE,
         background_color=FENSTERFARBE[thema],
         on_top=bool(einstellungen.get("vordergrund")),
         frameless=False,
-        hidden=rahmenlos,
+        hidden=True,
         # Das Ziehen macht das Widget selbst, damit die Verriegelung greift.
         easy_drag=False,
     )
     api._fenster = fenster
 
-    ablage = Fensterablage(fenster)
+    ablage = Fensterablage(fenster, api)
     ablage.verriegelt = bool(einstellungen.get("verriegelt"))
-    ablage.rahmenlos = rahmenlos
+    ablage.modus = darstellung
     api._ablage = ablage
     fenster.events.moved += ablage.merken
     fenster.events.resized += ablage.merken
@@ -688,20 +832,22 @@ def main():
     fertig = threading.Event()
 
     def beim_laden():
-        """Fensterstile setzen, sobald das Fenster steht.
+        """Gestalt des Fensters festlegen, sobald die Seite steht.
 
         loaded meldet sich auch nach einem erneuten Laden der Seite, deshalb
-        die Sperre - Rahmen und Transparenz werden nur einmal gesetzt.
+        die Sperre - das hier geschieht nur einmal.
         """
         if fertig.is_set():
             return
         fertig.set()
         if rahmenlos:
             api.rahmen_setzen(True)
+        api.client_setzen(breite, hoehe)
+        if "x" in lage and "y" in lage:
+            fenster.move(lage["x"], lage["y"])
         if transparenz:
             api.transparenz_setzen(transparenz)
-        if rahmenlos:
-            fenster.show()
+        fenster.show()
         ablage.lage = ablage._lage_lesen()
 
     fenster.events.loaded += beim_laden

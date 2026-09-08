@@ -2,6 +2,21 @@
 
 Die Nummern folgen dem Muster `Haupt.Neben.Korrektur`.
 
+## 1.7.0
+
+- Neue Darstellung **Leiste**: dieselbe Anzeige in einer Zeile, für den oberen
+  oder unteren Bildschirmrand. Umschaltbar über *Darstellung* im Kontextmenü.
+- Jede Darstellung führt ihre **eigene Fensterlage** - die Leiste steht am
+  Rand, die Karte anderswo, und beide finden beim Umschalten dorthin zurück.
+- **Über** öffnet sich in einem eigenen Fenster, statt die Anzeige zu
+  überdecken; in der Leiste wäre dafür ohnehin kein Platz.
+- Gespeichert wird nun die Anzeigefläche statt des Außenmaßes. Der Wert
+  bedeutet damit in jeder Lage dasselbe - mit Rahmen wie ohne, bei jeder
+  Bildschirmskalierung.
+- Behoben: Zwei Aufrufe aus dem Menü konnten sich gegenseitig überschreiben,
+  weil beide die ganze Einstellungsdatei lasen und zurückschrieben. Änderungen
+  laufen jetzt unter einer Sperre.
+
 ## 1.6.0
 
 - Menüpunkt **Über** mit Fassungsnummer, Datenquellen, Lizenz und Copyright.

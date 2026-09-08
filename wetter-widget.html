@@ -224,6 +224,84 @@
     opacity:0.7;
   }
 
+  /* -- Leiste -------------------------------------------------------------
+     Dieselbe Anzeige, nur in einer Zeile: alles nebeneinander statt
+     untereinander. So passt das Widget an den oberen oder unteren
+     Bildschirmrand, ohne halb den Schreibtisch zu verdecken. Die Angaben,
+     für die dann kein Platz ist - Entfernung der Messstation und der
+     ausführliche Quellenhinweis - treten zurück; beides steht weiterhin
+     unter "Über".
+     ---------------------------------------------------------------------- */
+  body.leiste{ padding:6px; }
+
+  body.leiste #app{
+    max-width:none;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    padding:6px 12px;
+    height:100%;
+    overflow:hidden;
+  }
+  body.leiste #content{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    flex:1;
+    min-width:0;
+  }
+  body.leiste .station-line,
+  body.leiste .city-name,
+  body.leiste .place-search button{ display:none; }
+
+  body.leiste .place-search{
+    width:118px;
+    flex:none;
+    margin:0;
+  }
+  body.leiste .place-search input{
+    font-size:12px;
+    padding:5px 8px;
+  }
+
+  body.leiste .main-readout{
+    border:none;
+    padding:0;
+    margin:0;
+    gap:9px;
+    align-items:center;
+    flex:none;
+  }
+  body.leiste .temp{ font-size:30px; }
+  body.leiste .temp sup{ font-size:13px; }
+  body.leiste .condition-col{ padding:0; }
+  body.leiste .condition-text{ font-size:12px; margin-bottom:1px; }
+
+  body.leiste .metrics{
+    display:flex;
+    margin:0;
+    flex:none;
+  }
+  body.leiste .metric{ padding:0 12px; }
+  body.leiste .metric-value{ font-size:14px; }
+
+  body.leiste .forecast{
+    flex:1;
+    min-width:0;
+    gap:6px;
+    border-left:1px solid var(--border);
+    padding-left:12px;
+  }
+  body.leiste .fc-bar-track{ height:14px; margin:3px auto; }
+  body.leiste .fc-temp{ font-size:12px; }
+
+  body.leiste .source{
+    margin:0;
+    flex:none;
+    text-align:right;
+  }
+  body.leiste .msg{ padding:0; text-align:left; }
+
   /* -- Kontextmenü -------------------------------------------------------
      Alle Einstellungen sitzen hier, damit die Anzeige selbst frei von
      Schaltern bleibt und das Widget auch ohne Fensterrahmen bedienbar ist.
@@ -398,6 +476,11 @@ const SOURCE_LANGUAGE = "de";
    wäre unsichtbar und nur noch über die Taskleiste zu erwischen. */
 const TRANSPARENZSTUFEN = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90];
 
+/* Darstellungen: die Karte ist das gewohnte Fenster, die Leiste eine
+   einzeilige Fassung für den oberen oder unteren Bildschirmrand. Beide führen
+   ihre eigene Fensterlage, dafür sorgt das Programm. */
+const DARSTELLUNGEN = ["karte", "leiste"];
+
 /* Abstände der selbsttätigen Aktualisierung in Minuten; 0 heißt "nur von
    Hand". Der Deutsche Wetterdienst liefert stündlich neue Messwerte, öfter
    als halbstündlich nachzufragen bringt also nichts. */
@@ -419,6 +502,7 @@ let TRANSPARENZ = 0;
 let INTERVALL = INTERVALL_VORGABE;
 let AUTOSTART = false;
 let EINHEIT = "metrisch";
+let DARSTELLUNG = "karte";
 const FASSUNG = GESPEICHERT.version || "?";
 
 function sprache_erkennen(){
@@ -527,7 +611,8 @@ function einstellungen_speichern(){
       verriegelt: VERRIEGELT,
       transparenz: TRANSPARENZ,
       intervall: INTERVALL,
-      einheiten: EINHEIT
+      einheiten: EINHEIT,
+      darstellung: DARSTELLUNG
     });
   } catch (e) { /* Speichern ist Beiwerk und darf die Anzeige nicht stören */ }
 }
@@ -562,6 +647,15 @@ function autostart_setzen(an){
       AUTOSTART = !!zustand;
     });
   } catch (e) {}
+}
+
+function darstellung_setzen(name){
+  if (DARSTELLUNGEN.indexOf(name) < 0) return;
+  DARSTELLUNG = name;
+  document.body.classList.toggle('leiste', name === "leiste");
+  oberflaeche_beschriften();
+  const api = programm();
+  if (api) { try { api.darstellung_setzen(name); } catch (e) {} }
 }
 
 function beenden(){
@@ -748,6 +842,14 @@ function aktualisieren_eintraege(){
   return eintraege;
 }
 
+function darstellungs_eintraege(){
+  return DARSTELLUNGEN.map(name => ({
+    text: _(name),
+    punkt: DARSTELLUNG === name,
+    tun: () => { darstellung_setzen(name); einstellungen_speichern(); }
+  }));
+}
+
 function einheiten_eintraege(){
   return Object.keys(EINHEITEN).map(name => ({
     text: _(name),
@@ -787,6 +889,7 @@ function menue_zeigen(x, y){
     { text: _("Dunkel"), haken: THEMA === "dark",
       tun: () => { thema_anwenden(THEMA === "dark" ? "light" : "dark"); einstellungen_speichern(); } },
     { trenner: true },
+    { text: _("Darstellung"), unter: darstellungs_eintraege() },
     { text: _("Transparenz"), unter: transparenz_eintraege() },
     { text: _("Einheiten"), unter: einheiten_eintraege() },
     { text: _("Sprache"), unter: sprach_eintraege() },
@@ -823,12 +926,7 @@ const LIZENZ = "Licensed under MIT License\n"
              + "Copyright 2026 Alexander Unverhau\n"
              + "Created with assistance of Claude AI";
 
-function ueber_zeigen(){
-  ueber_schliessen();
-  const tafel = document.createElement('div');
-  tafel.className = 'ueber';
-  tafel.id = 'ueber';
-
+function ueber_rumpf(){
   const teile = [];
   teile.push('<h1>' + _("Wetter Widget") + '</h1>');
   teile.push('<div class="fassung">' + _("Fassung {nummer}", {nummer: FASSUNG}) + '</div>');
@@ -853,8 +951,46 @@ function ueber_zeigen(){
     + "weiterzugeben - unter der Bedingung, dass dieser Copyright-Vermerk und "
     + "der Lizenztext in allen Kopien enthalten bleiben.") + '</p>');
   teile.push('<p>' + _("Die Software wird ohne jede Gewähr bereitgestellt.") + '</p>');
+  return teile.join('');
+}
 
-  tafel.innerHTML = teile.join('');
+/* Eigenständige Seite für das Über-Fenster. Die Farben werden aus dem
+   eingestellten Schema fest eingesetzt, denn dieses Fenster führt seine
+   eigene Seite und kennt die Palette des Widgets nicht. */
+function ueber_seite(){
+  const p = THEMES[THEMA] || THEMES[DEFAULT_THEME];
+  return '<!DOCTYPE html><html lang="' + SPRACHE + '"><head><meta charset="UTF-8">'
+    + '<title>' + _("Über") + '</title><style>'
+    + 'html,body{margin:0;height:100%;background:' + p.BG + ';color:' + p.TEXT + ';'
+    + 'font-family:"Segoe UI",-apple-system,sans-serif;}'
+    + 'main{padding:18px 22px;}'
+    + 'h1{font-size:17px;margin:0 0 2px;}'
+    + '.fassung{font-family:Consolas,monospace;font-size:11px;color:' + p.MUTED + ';margin-bottom:14px;}'
+    + 'h2{font-size:12px;font-weight:600;color:' + p.MUTED + ';margin:16px 0 6px;'
+    + 'padding-top:10px;border-top:1px solid ' + p.BORDER + ';}'
+    + 'p{font-size:13px;line-height:1.55;margin:0 0 8px;}'
+    + '.lizenz{font-family:Consolas,monospace;font-size:12px;line-height:1.7;'
+    + 'white-space:pre-line;margin-bottom:8px;}'
+    + '</style></head><body><main>' + ueber_rumpf() + '</main></body></html>';
+}
+
+function ueber_zeigen(){
+  // Bevorzugt ein eigenes Fenster: in der Leiste wäre für den Text ohnehin
+  // kein Platz. Ohne pywebview - also im Browser - bleibt die Tafel über der
+  // Anzeige.
+  const api = programm();
+  if (api && api.ueber_fenster){
+    try { api.ueber_fenster(ueber_seite()); return; } catch (e) {}
+  }
+  ueber_tafel_zeigen();
+}
+
+function ueber_tafel_zeigen(){
+  ueber_schliessen();
+  const tafel = document.createElement('div');
+  tafel.className = 'ueber';
+  tafel.id = 'ueber';
+  tafel.innerHTML = ueber_rumpf();
 
   const knopf = document.createElement('button');
   knopf.textContent = _("Schließen");
@@ -879,8 +1015,11 @@ const content = document.getElementById('content');
 /* Beschriftungen, die nicht bei jedem Abruf neu entstehen. */
 function oberflaeche_beschriften(){
   document.documentElement.lang = SPRACHE;
+  // In der Leiste ist für den ganzen Satz kein Platz; die Namensnennung
+  // des DWD bleibt trotzdem sichtbar, ausführlich steht sie unter "Über".
   document.getElementById('sourceLine').textContent =
-    _("Daten: DWD über Brightsky · nur Deutschland");
+    DARSTELLUNG === "leiste" ? _("Daten: DWD")
+                             : _("Daten: DWD über Brightsky · nur Deutschland");
   cityInput.placeholder = _("Ort eingeben, z. B. Dresden");
   searchBtn.textContent = _("Suchen");
 }
@@ -1049,6 +1188,9 @@ function starten(){
     ? GESPEICHERT.intervall : INTERVALL_VORGABE;
   AUTOSTART = !!GESPEICHERT.autostart;
   EINHEIT = EINHEITEN[GESPEICHERT.einheiten] ? GESPEICHERT.einheiten : "metrisch";
+  DARSTELLUNG = DARSTELLUNGEN.indexOf(GESPEICHERT.darstellung) >= 0
+    ? GESPEICHERT.darstellung : "karte";
+  document.body.classList.toggle('leiste', DARSTELLUNG === "leiste");
 
   thema_anwenden(GESPEICHERT.theme || DEFAULT_THEME);
   oberflaeche_beschriften();
@@ -1103,6 +1245,9 @@ var TRANSLATIONS = {
     "Rahmenlos": "Frameless",
     "Verriegelt": "Locked",
     "Dunkel": "Dark",
+    "Darstellung": "Layout",
+    "karte": "Card",
+    "leiste": "Bar",
     "Transparenz": "Transparency",
     "Einheiten": "Units",
     "metrisch": "Metric",
@@ -1115,6 +1260,7 @@ var TRANSLATIONS = {
     "Suchen": "Search",
     "Daten: DWD über Brightsky · nur Deutschland":
       "Data: DWD via Brightsky · Germany only",
+    "Daten: DWD": "Data: DWD",
 
     // --- Meldungen ------------------------------------------------------
     "Lade Wetterdaten …": "Loading weather data …",
