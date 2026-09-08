@@ -1052,17 +1052,32 @@ document.body.appendChild(menue);
    Erst wenn pywebview seine Bruecke in die Seite gelegt hat: das geschieht
    nicht sofort, und eine Meldung davor ginge ins Leere - das Fenster bliebe
    dann in seiner vorlaeufigen Groesse und unsichtbar. */
+var gemeldet = false;
+
 function groesse_melden(){
+  // Nur einmal je Seite: eine zweite Meldung erreichte das Programm
+  // moeglicherweise erst, wenn die Seite laengst ausgetauscht ist, und die
+  // Antwort liefe dann ins Leere.
+  if (gemeldet) return;
+  gemeldet = true;
   var r = menue.getBoundingClientRect();
   melden('menue_groesse', EBENE, Math.ceil(r.width), Math.ceil(r.height));
+}
+
+var versuche = 0;
+
+function bereit_pruefen(){
+  if (api()) { groesse_melden(); return; }
+  if (++versuche < 25) setTimeout(bereit_pruefen, 100);
 }
 
 if (api()) {
   groesse_melden();
 } else {
   window.addEventListener('pywebviewready', groesse_melden);
-  // Sicherheitsnetz, falls das Ereignis schon vorbei war
-  setTimeout(function(){ if (api()) groesse_melden(); }, 300);
+  // Sicherheitsnetz, falls das Ereignis schon vorbei war: bliebe die Meldung
+  // aus, stuende das Fenster in falscher Groesse und unsichtbar da.
+  setTimeout(bereit_pruefen, 100);
 }
 
 /* Der Fokus wandert zum Untermenü, sobald eines aufgeht - das Programm

@@ -13,7 +13,12 @@ Die Nummern folgen dem Muster `Haupt.Neben.Korrektur`.
   überdecken; in der Leiste wäre dafür ohnehin kein Platz.
 - Das **Kontextmenü** liegt ebenfalls in eigenen Fenstern - eines je Ebene.
   Nur so reicht es über den Rand des Widgets hinaus; in der Leiste stünden
-  sonst keine 80 Punkte Höhe zur Verfügung.
+  sonst keine 80 Punkte Höhe zur Verfügung. Die Fenster werden einmal
+  angelegt und danach nur noch versteckt und neu befüllt: sie bei jedem
+  Rechtsklick neu zu erzeugen dauerte spürbar lange, brachte Fensterordnung
+  und Eingabefokus durcheinander und ließ gelegentlich einen Rest stehen.
+  Ein Menü öffnet nun in rund einer fünftel Sekunde.
+- *Über* öffnet neben dem Widget statt irgendwo auf dem Bildschirm.
 - Behoben: In der Leiste schob sich das Ortsfeld unter die Temperatur.
   Eingabefelder bringen eine eigene Mindestbreite mit und schrumpfen im
   Flexlayout nicht unter sie.

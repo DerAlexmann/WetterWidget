@@ -482,6 +482,8 @@ class Api:
         self._ablage = ablage
         self._ueber = None                  # Fenster von "Über", falls offen
         self._menues = [None, None]         # Menüfenster je Ebene
+        self._menue_offen = [False, False]  # ist die Ebene gerade zu sehen?
+        self._menue_inhalt = [None, None]   # was zuletzt geladen wurde
         self._menue_lage = [(0, 0), (0, 0)]  # gewünschte Ecke je Ebene
         self._menue_anker = (0, 0)          # Mauszeiger beim Aufklappen
         self._hwnd = 0
@@ -758,14 +760,22 @@ class Api:
     # sind das keine 80 Punkte Höhe - ein Menü wäre dort unbrauchbar. Jede
     # Ebene bekommt deshalb ein eigenes, rahmenloses Fenster, das über allem
     # liegt und sich selbst so groß meldet, wie es sein muss.
+    #
+    # Die Fenster werden einmal angelegt und danach nur noch versteckt und
+    # neu befüllt. Ein WebView2-Fenster zu erzeugen dauert spürbar lange und
+    # bringt Fensterordnung und Eingabefokus durcheinander - bei jedem
+    # Rechtsklick neu wirkte das wie ein Flackern, und hin und wieder blieb
+    # ein Rest stehen.
 
-    def _menue_fenster(self, html, x, y):
-        """Ein rahmenloses Menüfenster anlegen - zunächst verborgen."""
-        thema = load_config().get("theme")
+    def _menue_bereit(self, ebene):
+        """Menüfenster dieser Ebene liefern, notfalls einmalig anlegen."""
+        if self._menues[ebene] is not None:
+            return self._menues[ebene]
         try:
-            return webview.create_window(
-                MENUE_TITEL, html=html, js_api=self,
-                width=260, height=220, x=int(x), y=int(y),
+            thema = load_config().get("theme")
+            self._menues[ebene] = webview.create_window(
+                "%s %d" % (MENUE_TITEL, ebene), html="<body></body>", js_api=self,
+                width=200, height=200, x=0, y=0,
                 # Ohne eigene Angabe verlangt pywebview mindestens 200 Punkte
                 # Breite - ein schmales Menü bekäme daneben eine leere Fläche.
                 min_size=(40, 20),
@@ -773,20 +783,41 @@ class Api:
                 background_color=FENSTERFARBE[
                     thema if thema in FENSTERFARBE else DEFAULT_THEME])
         except Exception:
-            return None
+            self._menues[ebene] = None
+        return self._menues[ebene]
+
+    def _menue_verstecken(self, ebene):
+        fenster = self._menues[ebene]
+        self._menue_offen[ebene] = False
+        self._menue_inhalt[ebene] = None
+        if fenster is None:
+            return
+        try:
+            fenster.hide()
+        except Exception:
+            pass
 
     def menue_oeffnen(self, html, maus_x, maus_y):
         """Hauptmenü am Mauszeiger aufklappen."""
-        self.menue_schliessen()
         if not isinstance(html, str) or len(html) > 400000:
             return False
+        self._menue_verstecken(1)
         try:
             self._menue_anker = (int(maus_x), int(maus_y))
         except (TypeError, ValueError):
             self._menue_anker = (0, 0)
         self._menue_lage[0] = self._menue_anker
-        self._menues = [self._menue_fenster(html, *self._menue_anker), None]
-        return self._menues[0] is not None
+
+        fenster = self._menue_bereit(0)
+        if fenster is None:
+            return False
+        self._menue_offen[0] = False        # erst zeigen, wenn die Größe steht
+        self._menue_inhalt[0] = html
+        try:
+            fenster.load_html(html)
+            return True
+        except Exception:
+            return False
 
     def menue_unter(self, html, links, oben):
         """Untermenü neben dem Hauptmenü aufklappen.
@@ -794,25 +825,30 @@ class Api:
         Die Angaben sind Punkte innerhalb des Hauptmenüs; wo dessen Fenster
         steht, weiß nur das Programm.
         """
-        self.menue_unter_zu()
-        if self._menues[0] is None or not isinstance(html, str):
+        if not isinstance(html, str):
             return False
-        # Die eigene Ecke ist gemerkt: ein noch verborgenes Fenster gibt seine
+        # Dasselbe Untermenü noch einmal anzusteuern - etwa weil die Maus
+        # kurz danebengeriet - soll es nicht neu laden lassen.
+        if self._menue_offen[1] and self._menue_inhalt[1] == html:
+            return True
+        # Die eigene Ecke ist gemerkt: ein verborgenes Fenster gibt seine
         # Lage nicht zuverlässig heraus.
-        x = self._menue_lage[0][0] + int(links)
-        y = self._menue_lage[0][1] + int(oben)
-        self._menue_lage[1] = (x, y)
-        self._menues[1] = self._menue_fenster(html, x, y)
-        return self._menues[1] is not None
+        self._menue_lage[1] = (self._menue_lage[0][0] + int(links),
+                               self._menue_lage[0][1] + int(oben))
+        fenster = self._menue_bereit(1)
+        if fenster is None:
+            return False
+        self._menue_offen[1] = False
+        self._menue_inhalt[1] = html
+        try:
+            fenster.load_html(html)
+            return True
+        except Exception:
+            return False
 
     def menue_unter_zu(self):
-        """Untermenü schließen, Hauptmenü stehen lassen."""
-        fenster, self._menues[1] = self._menues[1], None
-        if fenster is not None:
-            try:
-                fenster.destroy()
-            except Exception:
-                pass
+        """Untermenü verstecken, Hauptmenü stehen lassen."""
+        self._menue_verstecken(1)
         return True
 
     def menue_groesse(self, ebene, breite, hoehe):
@@ -839,12 +875,6 @@ class Api:
             pass
 
         self.client_setzen(breite, hoehe, hwnd)
-        # Einmal nachmessen und nachbessern: pywebview legt rahmenlose Fenster
-        # nicht immer in der angegebenen Größe an, und ein Menü, das schmaler
-        # ist als sein Fenster, ließe daneben eine leere Fläche stehen.
-        ist = self.client_lesen(hwnd)
-        if ist and ist != (breite, hoehe):
-            self.client_setzen(2 * breite - ist[0], 2 * hoehe - ist[1], hwnd)
 
         x, y = self._menue_lage[ebene]
         lage = sichtbare_lage({"x": x, "y": y, "breite": breite, "hoehe": hoehe},
@@ -857,6 +887,7 @@ class Api:
                 pass
         try:
             fenster.show()
+            self._menue_offen[ebene] = True
             return True
         except Exception:
             return False
@@ -868,8 +899,9 @@ class Api:
         das neue Fenster - dann darf nichts geschlossen werden.
         """
         def pruefen():
+            if not any(self._menue_offen):
+                return
             try:
-                from ctypes import wintypes
                 vorn = int(_user32().GetForegroundWindow() or 0)
             except Exception:
                 return
@@ -877,52 +909,37 @@ class Api:
             if vorn not in eigene:
                 self.menue_schliessen()
 
-        uhr = threading.Timer(0.25, pruefen)
+        uhr = threading.Timer(0.3, pruefen)
         uhr.daemon = True
         uhr.start()
         return True
 
     def menue_wahl(self, kennung):
-        """Getroffene Wahl an die Seite des Widgets weiterreichen.
-
-        Erst die Wahl weitergeben, dann die Menüfenster schließen: dieser
-        Aufruf kommt aus einem Menüfenster, und mit ihm fiele auch die
-        Brücke, über die er läuft.
-        """
+        """Getroffene Wahl an die Seite des Widgets weiterreichen."""
+        self.menue_schliessen()
         if not isinstance(kennung, str) or len(kennung) > 60:
-            self.menue_schliessen()
             return False
         sicher = kennung.replace("\\", "").replace("'", "")
         try:
             self._fenster.run_js("menue_ausfuehren('%s');" % sicher)
-            ergebnis = True
+            return True
         except Exception:
-            ergebnis = False
-        uhr = threading.Timer(0.15, self.menue_schliessen)
-        uhr.daemon = True
-        uhr.start()
-        return ergebnis
+            return False
 
     def menue_schliessen(self):
-        """Alle Menüfenster schließen."""
-        fenster, self._menues = list(self._menues), [None, None]
-        for eines in fenster:
-            if eines is None:
-                continue
-            try:
-                eines.destroy()
-            except Exception:
-                pass
+        """Alle Menüfenster verstecken."""
+        self._menue_verstecken(1)
+        self._menue_verstecken(0)
         return True
 
     # -- Über dieses Programm --------------------------------------------
 
     def ueber_fenster(self, html):
-        """Zeigt "Über" in einem eigenen Fenster.
+        """Zeigt "Über" in einem eigenen Fenster, beim Widget.
 
-        In der Leiste wäre für den Text kein Platz, und auch als Karte liest
-        es sich in einem eigenen Fenster besser. Ist es bereits offen, wird
-        es nur nach vorn geholt.
+        In der Leiste wäre für den Text kein Platz, und auch als Fenster
+        liest es sich daneben besser. Ohne Angabe einer Ecke setzte pywebview
+        das Fenster irgendwohin auf den Bildschirm.
         """
         if not isinstance(html, str) or len(html) > 200000:
             return False
@@ -932,12 +949,22 @@ class Api:
                 return True
         except Exception:
             pass
+
+        breite, hoehe = 470, 560
+        lage = self._ablage._lage_lesen() if self._ablage is not None else None
+        x = (lage or {}).get("x", 0) + 30
+        y = (lage or {}).get("y", 0) + 30
+        gerueckt = sichtbare_lage({"x": x, "y": y, "breite": breite, "hoehe": hoehe},
+                                  (breite, hoehe))
+        if gerueckt:
+            x, y = gerueckt["x"], gerueckt["y"]
+
+        thema = load_config().get("theme")
         try:
             self._ueber = webview.create_window(
-                UEBER_TITEL, html=html, width=470, height=560,
+                UEBER_TITEL, html=html, width=breite, height=hoehe, x=x, y=y,
                 min_size=(360, 320), background_color=FENSTERFARBE[
-                    load_config().get("theme") if load_config().get("theme")
-                    in FENSTERFARBE else DEFAULT_THEME])
+                    thema if thema in FENSTERFARBE else DEFAULT_THEME])
             return True
         except Exception:
             return False
