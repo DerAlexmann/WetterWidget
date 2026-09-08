@@ -5,11 +5,20 @@ Die Nummern folgen dem Muster `Haupt.Neben.Korrektur`.
 ## 1.7.0
 
 - Neue Darstellung **Leiste**: dieselbe Anzeige in einer Zeile, für den oberen
-  oder unteren Bildschirmrand. Umschaltbar über *Darstellung* im Kontextmenü.
+  oder unteren Bildschirmrand. Umschaltbar über *Darstellung ▸ Fenster* oder
+  *Leiste* im Kontextmenü.
 - Jede Darstellung führt ihre **eigene Fensterlage** - die Leiste steht am
   Rand, die Karte anderswo, und beide finden beim Umschalten dorthin zurück.
 - **Über** öffnet sich in einem eigenen Fenster, statt die Anzeige zu
   überdecken; in der Leiste wäre dafür ohnehin kein Platz.
+- Das **Kontextmenü** liegt ebenfalls in eigenen Fenstern - eines je Ebene.
+  Nur so reicht es über den Rand des Widgets hinaus; in der Leiste stünden
+  sonst keine 80 Punkte Höhe zur Verfügung.
+- Behoben: In der Leiste schob sich das Ortsfeld unter die Temperatur.
+  Eingabefelder bringen eine eigene Mindestbreite mit und schrumpfen im
+  Flexlayout nicht unter sie.
+- Die Leiste hat Platz für dreistellige Werte samt Vorzeichen, damit die
+  Zeile bei Frost genauso aufgebaut ist wie bei Wärme.
 - Gespeichert wird nun die Anzeigefläche statt des Außenmaßes. Der Wert
   bedeutet damit in jeder Lage dasselbe - mit Rahmen wie ohne, bei jeder
   Bildschirmskalierung.

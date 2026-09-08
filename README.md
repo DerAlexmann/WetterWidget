@@ -9,10 +9,12 @@ Microsoft-WebView2-Komponente läuft - es wird **kein externer Browser**
 gestartet und nichts installiert. Deutsch und Englisch, helles und dunkles
 Farbschema, metrische und imperiale Einheiten.
 
-Zwei Darstellungen: als **Karte** oder als einzeilige **Leiste** für den
+Zwei Darstellungen: als **Fenster** oder als einzeilige **Leiste** für den
 oberen oder unteren Bildschirmrand.
 
 ![Die Leiste, rahmenlos](docs/leiste-rahmenlos.png)
+
+![Die Leiste mit geöffnetem Kontextmenü](docs/leiste-menue.png)
 
 ![Das Widget im dunklen Schema](docs/widget-dunkel.png)
 
@@ -56,7 +58,7 @@ Im Fenster stehen nur das Ortsfeld und die Anzeige. Alles andere liegt im
 | Menüpunkt | Wirkung |
 |---|---|
 | Aktualisieren ▸ | *Jetzt* abrufen, und in welchem Abstand von selbst |
-| Darstellung ▸ | Karte oder Leiste |
+| Darstellung ▸ | Fenster oder Leiste |
 | Immer vorn | Fenster über allen anderen halten |
 | Rahmenlos | Windows-Rahmen samt Titelleiste abnehmen |
 | Verriegelt | Fenster gegen versehentliches Verschieben sichern |
@@ -80,7 +82,7 @@ Aktualisieren von Hand verschiebt ihn also. Der einmal nachgeschlagene Ort
 wird behalten, sodass die Ortssuche nicht bei jedem Durchgang erneut
 befragt wird.
 
-**Darstellung** wechselt zwischen der Karte und der Leiste. Die Leiste
+**Darstellung** wechselt zwischen *Fenster* und *Leiste*. Die Leiste
 zeigt dasselbe in einer Zeile - Ort, Temperatur, Wetterlage, die drei
 Messwerte und die nächsten Stunden - und ist damit flach genug für den
 oberen oder unteren Bildschirmrand. Entfernung der Messstation und der
@@ -88,8 +90,14 @@ ausführliche Quellenhinweis treten dabei zurück; beides steht weiterhin
 unter *Über*.
 
 Jede Darstellung führt ihre **eigene Lage**: die Leiste steht meist am Rand,
-die Karte irgendwo daneben, und beim Umschalten findet jede an ihren Platz
-zurück.
+das Fenster irgendwo daneben, und beim Umschalten findet jede an ihren Platz
+zurück. Ist für eine Darstellung noch keine Lage bekannt, rückt das Programm
+das Fenster in den Bildschirm hinein - die Leiste ist deutlich breiter und
+ragte sonst über den Rand hinaus.
+
+Das **Kontextmenü** erscheint in eigenen Fenstern, eines je Ebene. Eine Seite
+kann nicht über ihr Fenster hinaus zeichnen, und in der Leiste stünden dafür
+keine 80 Punkte Höhe zur Verfügung.
 
 **Über** öffnet sich in einem eigenen Fenster. In der Leiste wäre für den
 Text kein Platz, und auch als Karte liest er sich dort besser.
@@ -128,8 +136,8 @@ und gilt bei jeder Bildschirmskalierung.
 | `transparenz` | 0 bis 90 |
 | `einheiten` | `metrisch` oder `imperial` |
 | `intervall` | Minuten bis zur nächsten Aktualisierung, 0 = nur von Hand |
-| `darstellung` | `karte` oder `leiste` |
-| `fenster` | Lage der Karte |
+| `darstellung` | `karte` (Fenster) oder `leiste` |
+| `fenster` | Lage der Fenster-Darstellung |
 | `leiste` | Lage der Leiste |
 
 Beim nächsten Start steht das Fenster wieder an seinem Platz und in seinem

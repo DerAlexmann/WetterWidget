@@ -262,7 +262,16 @@
   body.leiste .place-search input{
     font-size:12px;
     padding:5px 8px;
+    /* Eingabefelder bringen eine eigene Mindestbreite mit und schrumpfen im
+       Flexlayout nicht unter sie - ohne min-width liefe das Feld über seine
+       Hülle hinaus und unter die Temperatur. */
+    min-width:0;
   }
+
+  /* Platz für dreistellige Werte samt Vorzeichen, damit die Zeile bei Frost
+     nicht anders aufgebaut ist als bei Wärme. */
+  body.leiste .temp{ min-width:64px; text-align:right; }
+  body.leiste .fc-item{ min-width:34px; }
 
   body.leiste .main-readout{
     border:none;
@@ -480,6 +489,11 @@ const TRANSPARENZSTUFEN = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90];
    einzeilige Fassung für den oberen oder unteren Bildschirmrand. Beide führen
    ihre eigene Fensterlage, dafür sorgt das Programm. */
 const DARSTELLUNGEN = ["karte", "leiste"];
+
+/* Beschriftung im Menü. Der innere Name bleibt "karte" - er steht so in der
+   Einstellungsdatei -, angezeigt wird aber "Fenster": das versteht sich von
+   selbst, während "Karte" eher an eine Landkarte denken lässt. */
+const DARSTELLUNG_NAMEN = { karte: "Fenster", leiste: "Leiste" };
 
 /* Abstände der selbsttätigen Aktualisierung in Minuten; 0 heißt "nur von
    Hand". Der Deutsche Wetterdienst liefert stündlich neue Messwerte, öfter
@@ -787,7 +801,7 @@ function menue_bauen(eintraege, x, y, anker){
       });
       zeile.addEventListener('click', () => {
         menue_schliessen();
-        if (eintrag.tun) eintrag.tun();
+        if (eintrag.id) menue_ausfuehren(eintrag.id);
       });
     }
 
@@ -816,7 +830,7 @@ function transparenz_eintraege(){
   return TRANSPARENZSTUFEN.map(stufe => ({
     text: stufe + " %",
     punkt: TRANSPARENZ === stufe,
-    tun: () => { transparenz_setzen(stufe); einstellungen_speichern(); }
+    id: "transparenz:" + stufe
   }));
 }
 
@@ -829,14 +843,14 @@ function intervall_beschriftung(minuten){
 
 function aktualisieren_eintraege(){
   const eintraege = [
-    { text: _("Jetzt"), tun: () => loadWeather(cityInput.value.trim()) },
+    { text: _("Jetzt"), id: "jetzt" },
     { trenner: true }
   ];
   for (const minuten of INTERVALLE){
     eintraege.push({
       text: intervall_beschriftung(minuten),
       punkt: INTERVALL === minuten,
-      tun: () => { intervall_setzen(minuten); einstellungen_speichern(); }
+      id: "takt:" + minuten
     });
   }
   return eintraege;
@@ -844,9 +858,9 @@ function aktualisieren_eintraege(){
 
 function darstellungs_eintraege(){
   return DARSTELLUNGEN.map(name => ({
-    text: _(name),
+    text: _(DARSTELLUNG_NAMEN[name]),
     punkt: DARSTELLUNG === name,
-    tun: () => { darstellung_setzen(name); einstellungen_speichern(); }
+    id: "darstellung:" + name
   }));
 }
 
@@ -854,11 +868,7 @@ function einheiten_eintraege(){
   return Object.keys(EINHEITEN).map(name => ({
     text: _(name),
     punkt: EINHEIT === name,
-    tun: () => {
-      EINHEIT = name;
-      anzeigen();                 // vorhandene Messwerte genügen
-      einstellungen_speichern();
-    }
+    id: "einheiten:" + name
   }));
 }
 
@@ -866,45 +876,208 @@ function sprach_eintraege(){
   return Object.keys(LANGUAGE_NAMES).map(code => ({
     text: LANGUAGE_NAMES[code],
     punkt: SPRACHE === code,
-    tun: () => {
-      SPRACHE = code;
-      oberflaeche_beschriften();
-      einstellungen_speichern();
-      loadWeather(cityInput.value.trim());
-    }
+    id: "sprache:" + code
   }));
 }
 
-function menue_zeigen(x, y){
-  menue_schliessen();
-  menue_bauen([
+/* Der Aufbau des Menüs als reine Beschreibung: Text, Häkchen, Punkt,
+   Untermenüs und eine Kennung. Aus derselben Beschreibung entsteht sowohl das
+   Fenster-Menü des Programms als auch die eingebettete Fassung im Browser. */
+function menue_daten(){
+  return [
     { text: _("Aktualisieren"), unter: aktualisieren_eintraege() },
     { trenner: true },
-    { text: _("Immer vorn"), haken: VORDERGRUND,
-      tun: () => { vordergrund_setzen(!VORDERGRUND); einstellungen_speichern(); } },
-    { text: _("Rahmenlos"), haken: RAHMENLOS,
-      tun: () => { rahmen_setzen(!RAHMENLOS); einstellungen_speichern(); } },
-    { text: _("Verriegelt"), haken: VERRIEGELT,
-      tun: () => { VERRIEGELT = !VERRIEGELT; einstellungen_speichern(); } },
-    { text: _("Dunkel"), haken: THEMA === "dark",
-      tun: () => { thema_anwenden(THEMA === "dark" ? "light" : "dark"); einstellungen_speichern(); } },
+    { text: _("Immer vorn"), haken: VORDERGRUND, id: "vorn" },
+    { text: _("Rahmenlos"), haken: RAHMENLOS, id: "rahmenlos" },
+    { text: _("Verriegelt"), haken: VERRIEGELT, id: "verriegelt" },
+    { text: _("Dunkel"), haken: THEMA === "dark", id: "dunkel" },
     { trenner: true },
     { text: _("Darstellung"), unter: darstellungs_eintraege() },
     { text: _("Transparenz"), unter: transparenz_eintraege() },
     { text: _("Einheiten"), unter: einheiten_eintraege() },
     { text: _("Sprache"), unter: sprach_eintraege() },
     { trenner: true },
-    { text: _("Mit Windows starten"), haken: AUTOSTART,
-      tun: () => autostart_setzen(!AUTOSTART) },
-    { text: _("Über"), tun: ueber_zeigen },
-    { text: _("Beenden"), tun: beenden }
-  ], x, y);
+    { text: _("Mit Windows starten"), haken: AUTOSTART, id: "autostart" },
+    { text: _("Über"), id: "ueber" },
+    { text: _("Beenden"), id: "beenden" }
+  ];
 }
+
+/* Führt aus, was im Menü gewählt wurde. Wird auch vom Programm gerufen,
+   wenn die Wahl aus dem Menüfenster kommt. */
+function menue_ausfuehren(kennung){
+  const teile = String(kennung).split(":");
+  const was = teile[0], wert = teile[1];
+  switch (was){
+    case "jetzt":       loadWeather(cityInput.value.trim()); break;
+    case "takt":        intervall_setzen(Number(wert)); einstellungen_speichern(); break;
+    case "vorn":        vordergrund_setzen(!VORDERGRUND); einstellungen_speichern(); break;
+    case "rahmenlos":   rahmen_setzen(!RAHMENLOS); einstellungen_speichern(); break;
+    case "verriegelt":  VERRIEGELT = !VERRIEGELT; einstellungen_speichern(); break;
+    case "dunkel":      thema_anwenden(THEMA === "dark" ? "light" : "dark");
+                        einstellungen_speichern(); break;
+    case "darstellung": darstellung_setzen(wert); einstellungen_speichern(); break;
+    case "transparenz": transparenz_setzen(Number(wert)); einstellungen_speichern(); break;
+    case "einheiten":   EINHEIT = wert; anzeigen(); einstellungen_speichern(); break;
+    case "sprache":     SPRACHE = wert; oberflaeche_beschriften();
+                        einstellungen_speichern();
+                        loadWeather(cityInput.value.trim()); break;
+    case "autostart":   autostart_setzen(!AUTOSTART); break;
+    case "ueber":       ueber_zeigen(); break;
+    case "beenden":     beenden(); break;
+  }
+}
+
+/* Eigenständige Seite für ein Menüfenster. Jede Ebene bekommt ein eigenes
+   Fenster - genau so groß wie ihr Menü. Ein gemeinsames Fenster für Menü und
+   Untermenü wäre treppenförmig, und der leere Teil ließe sich nicht sauber
+   ausblenden: einen Fensterumriss verwirft WinForms wieder, und die
+   Schlüsselfarbe geschichteter Fenster erreicht WebView2 nicht, weil es über
+   DirectComposition zeichnet. */
+function menue_seite(eintraege, ebene){
+  const p = THEMES[THEMA] || THEMES[DEFAULT_THEME];
+
+  // Untermenüs bringen ihre eigene fertige Seite gleich mit, damit das
+  // Menüfenster sie ohne Rückfrage öffnen kann.
+  const daten = eintraege.map(eintrag => {
+    if (!eintrag.unter) return eintrag;
+    const kopie = Object.assign({}, eintrag);
+    kopie.unterSeite = menue_seite(eintrag.unter, ebene + 1);
+    delete kopie.unter;
+    return kopie;
+  });
+
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'
+    + 'html,body{margin:0;height:100%;overflow:hidden;background:' + p.CARD + ';'
+    + 'font-family:"Segoe UI",-apple-system,sans-serif;user-select:none;'
+    + 'color:' + p.TEXT + ';}'
+    + '.menu{position:absolute;left:0;top:0;min-width:150px;padding:4px 0;'
+    + 'background:' + p.CARD + ';border:1px solid ' + p.BORDER + ';'
+    + 'border-radius:4px;font-size:12px;box-sizing:border-box;}'
+    + '.menu-item{display:flex;align-items:center;gap:8px;padding:5px 12px 5px 8px;'
+    + 'white-space:nowrap;cursor:default;}'
+    + '.menu-item:hover{background:' + p.BTN_BG + ';}'
+    + '.haken{width:10px;flex:none;color:' + p.ACCENT + ';font-size:11px;}'
+    + '.pfeil{margin-left:auto;padding-left:16px;color:' + p.MUTED + ';}'
+    + '.trenner{height:1px;background:' + p.BORDER + ';margin:4px 0;}'
+    + '</style></head><body><script>\n'
+    // Die Untermenüs stecken als fertige Seiten in den Daten, und darin steht
+    // ein schließendes Skript-Element. Unmaskiert beendete es genau hier das
+    // Skript der umgebenden Seite - deshalb wird jedes "</" entschärft.
+    + 'var DATEN = ' + JSON.stringify(daten).split('</').join('<\\/') + ';\n'
+    + 'var EBENE = ' + ebene + ';\n'
+    + MENUEFENSTER_SKRIPT
+    + '\n<\/script></body></html>';
+}
+
+function menue_zeigen(x, y, bildschirmX, bildschirmY){
+  const api = programm();
+  if (api && api.menue_oeffnen){
+    // Ein eigenes Fenster: nur so reicht das Menü über den Rand des Widgets
+    // hinaus - in der Leiste wären sonst keine 80 Punkte Höhe verfügbar.
+    try {
+      api.menue_oeffnen(menue_seite(menue_daten(), 0), bildschirmX, bildschirmY);
+      return;
+    } catch (e) {}
+  }
+  menue_schliessen();
+  menue_bauen(menue_daten(), x, y);
+}
+
+/* Das Skript des Menüfensters. Es steht hier als Text, weil es in einer
+   eigenen Seite läuft und dort nichts von diesem Programm kennt. */
+const MENUEFENSTER_SKRIPT = `
+function api(){
+  try { return (window.pywebview && window.pywebview.api) ? window.pywebview.api : null; }
+  catch (e) { return null; }
+}
+
+/* Ruft eine Aufgabe des Programms mit genau den Werten auf, die uebergeben
+   wurden - nicht mit festen dreien, sonst bekaeme etwa menue_wahl() drei
+   Werte statt einem. */
+function melden(name){
+  var s = api();
+  if (!s || !s[name]) return;
+  var werte = Array.prototype.slice.call(arguments, 1);
+  try { s[name].apply(s, werte); } catch (e) {}
+}
+
+var menue = document.createElement('div');
+menue.className = 'menu';
+
+DATEN.forEach(function(eintrag){
+  if (eintrag.trenner){
+    var linie = document.createElement('div');
+    linie.className = 'trenner';
+    menue.appendChild(linie);
+    return;
+  }
+
+  var zeile = document.createElement('div');
+  zeile.className = 'menu-item';
+
+  var marke = document.createElement('span');
+  marke.className = 'haken';
+  marke.textContent = eintrag.haken ? '\u2713' : (eintrag.punkt ? '\u2022' : '');
+  zeile.appendChild(marke);
+
+  var text = document.createElement('span');
+  text.textContent = eintrag.text;
+  zeile.appendChild(text);
+
+  if (eintrag.unterSeite){
+    var pfeil = document.createElement('span');
+    pfeil.className = 'pfeil';
+    pfeil.textContent = '\u203a';
+    zeile.appendChild(pfeil);
+    zeile.addEventListener('mouseenter', function(){
+      var r = zeile.getBoundingClientRect();
+      melden('menue_unter', eintrag.unterSeite, Math.round(r.right), Math.round(r.top) - 5);
+    });
+  } else {
+    zeile.addEventListener('mouseenter', function(){
+      if (EBENE === 0) melden('menue_unter_zu');
+    });
+    zeile.addEventListener('click', function(){
+      if (eintrag.id) melden('menue_wahl', eintrag.id);
+    });
+  }
+  menue.appendChild(zeile);
+});
+
+document.body.appendChild(menue);
+
+/* Platzbedarf melden, damit das Programm das Fenster genau so gross macht.
+
+   Erst wenn pywebview seine Bruecke in die Seite gelegt hat: das geschieht
+   nicht sofort, und eine Meldung davor ginge ins Leere - das Fenster bliebe
+   dann in seiner vorlaeufigen Groesse und unsichtbar. */
+function groesse_melden(){
+  var r = menue.getBoundingClientRect();
+  melden('menue_groesse', EBENE, Math.ceil(r.width), Math.ceil(r.height));
+}
+
+if (api()) {
+  groesse_melden();
+} else {
+  window.addEventListener('pywebviewready', groesse_melden);
+  // Sicherheitsnetz, falls das Ereignis schon vorbei war
+  setTimeout(function(){ if (api()) groesse_melden(); }, 300);
+}
+
+/* Der Fokus wandert zum Untermenü, sobald eines aufgeht - das Programm
+   entscheidet deshalb anhand des Vordergrundfensters, ob wirklich zu
+   schließen ist. */
+window.addEventListener('blur', function(){ melden('menue_blur'); });
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') melden('menue_schliessen');
+});
+`;
 
 function menue_einrichten(){
   document.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    menue_zeigen(e.clientX, e.clientY);
+    menue_zeigen(e.clientX, e.clientY, e.screenX, e.screenY);
   });
   document.addEventListener('mousedown', (e) => {
     if (!e.target.closest('.menu')) menue_schliessen();
@@ -1246,8 +1419,8 @@ var TRANSLATIONS = {
     "Verriegelt": "Locked",
     "Dunkel": "Dark",
     "Darstellung": "Layout",
-    "karte": "Card",
-    "leiste": "Bar",
+    "Fenster": "Window",
+    "Leiste": "Bar",
     "Transparenz": "Transparency",
     "Einheiten": "Units",
     "metrisch": "Metric",

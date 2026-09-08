@@ -47,12 +47,13 @@ PROGRAMM = "Wetter Widget"
 VERSION = "1.7.0"
 CONFIG_NAME = "wetter-widget.json"
 UEBER_TITEL = "Über " + PROGRAMM
+MENUE_TITEL = PROGRAMM + " - Menü"
 
 # Darstellungen und die Anzeigefläche, die jede von ihnen braucht - in
 # Punkten, also unabhängig von der Bildschirmskalierung. Gemeint ist die
 # Fläche *innerhalb* des Fensters; der Rahmen kommt aussen hinzu.
 DARSTELLUNGEN = ("karte", "leiste")
-GROESSE = {"karte": (400, 428), "leiste": (780, 76)}
+GROESSE = {"karte": (400, 428), "leiste": (900, 76)}
 LAGE_SCHLUESSEL = {"karte": "fenster", "leiste": "leiste"}
 DEFAULT_DARSTELLUNG = "karte"
 
@@ -270,15 +271,15 @@ WS_CAPTION, WS_THICKFRAME = 0x00C00000, 0x00040000
 WS_MINIMIZEBOX, WS_MAXIMIZEBOX, WS_SYSMENU = 0x00020000, 0x00010000, 0x00080000
 RAHMENBITS = WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU
 WS_EX_LAYERED = 0x00080000
+WS_EX_TOOLWINDOW = 0x00000080       # hält ein Fenster aus der Taskleiste
 LWA_ALPHA = 0x00000002
+LWA_COLORKEY = 0x00000001
 SWP_NOSIZE, SWP_NOMOVE, SWP_NOZORDER = 0x0001, 0x0002, 0x0004
 SWP_NOACTIVATE, SWP_FRAMECHANGED = 0x0010, 0x0020
 HWND_TOPMOST, HWND_NOTOPMOST = -1, -2
 
 
 _USER32 = None
-
-
 def _user32():
     """user32 mit den Signaturen, die dieses Programm braucht.
 
@@ -303,6 +304,8 @@ def _user32():
     u.SetLayeredWindowAttributes.argtypes = [wintypes.HWND, wintypes.COLORREF,
                                              ctypes.c_ubyte, ctypes.c_uint]
     u.SetLayeredWindowAttributes.restype = wintypes.BOOL
+    u.GetForegroundWindow.argtypes = []
+    u.GetForegroundWindow.restype = wintypes.HWND
     u.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
     u.FindWindowW.restype = wintypes.HWND
     # Fensterkennungen sind Zeiger: ohne restype schneidet ctypes sie auf
@@ -478,6 +481,9 @@ class Api:
         self._fenster = None                # wird nach create_window gesetzt
         self._ablage = ablage
         self._ueber = None                  # Fenster von "Über", falls offen
+        self._menues = [None, None]         # Menüfenster je Ebene
+        self._menue_lage = [(0, 0), (0, 0)]  # gewünschte Ecke je Ebene
+        self._menue_anker = (0, 0)          # Mauszeiger beim Aufklappen
         self._hwnd = 0
         self._griff = None                  # Abstand Mauszeiger -> Fensterecke
 
@@ -648,9 +654,9 @@ class Api:
 
     # -- Anzeigefläche und Darstellung -----------------------------------
 
-    def client_lesen(self):
+    def client_lesen(self, hwnd=None):
         """Anzeigefläche in Punkten, oder None bei geschlossenem Fenster."""
-        hwnd = self._fensterhandle()
+        hwnd = hwnd or self._fensterhandle()
         if not hwnd:
             return None
         try:
@@ -665,13 +671,21 @@ class Api:
         except Exception:
             return None
 
-    def client_setzen(self, breite, hoehe):
+    @staticmethod
+    def _handle_von(fenster):
+        """Fensterkennung eines beliebigen pywebview-Fensters."""
+        try:
+            return int(fenster.native.Handle.ToInt64())
+        except Exception:
+            return 0
+
+    def client_setzen(self, breite, hoehe, hwnd=None):
         """Fenster so bemessen, dass die Anzeigefläche genau so groß wird.
 
         Der Rahmen wird dazugerechnet, nicht abgezogen - deshalb stimmt das
         Maß mit und ohne Rahmen und bei jeder Bildschirmskalierung.
         """
-        hwnd = self._fensterhandle()
+        hwnd = hwnd or self._fensterhandle()
         if not hwnd:
             return False
         try:
@@ -736,6 +750,169 @@ class Api:
             except Exception:
                 pass
         self._ablage.lage = self._ablage._lage_lesen()
+        return True
+
+    # -- Kontextmenü als eigene Fenster ----------------------------------
+    #
+    # Eine Seite kann nicht über ihr Fenster hinaus zeichnen. In der Leiste
+    # sind das keine 80 Punkte Höhe - ein Menü wäre dort unbrauchbar. Jede
+    # Ebene bekommt deshalb ein eigenes, rahmenloses Fenster, das über allem
+    # liegt und sich selbst so groß meldet, wie es sein muss.
+
+    def _menue_fenster(self, html, x, y):
+        """Ein rahmenloses Menüfenster anlegen - zunächst verborgen."""
+        thema = load_config().get("theme")
+        try:
+            return webview.create_window(
+                MENUE_TITEL, html=html, js_api=self,
+                width=260, height=220, x=int(x), y=int(y),
+                # Ohne eigene Angabe verlangt pywebview mindestens 200 Punkte
+                # Breite - ein schmales Menü bekäme daneben eine leere Fläche.
+                min_size=(40, 20),
+                frameless=True, on_top=True, hidden=True, easy_drag=False,
+                background_color=FENSTERFARBE[
+                    thema if thema in FENSTERFARBE else DEFAULT_THEME])
+        except Exception:
+            return None
+
+    def menue_oeffnen(self, html, maus_x, maus_y):
+        """Hauptmenü am Mauszeiger aufklappen."""
+        self.menue_schliessen()
+        if not isinstance(html, str) or len(html) > 400000:
+            return False
+        try:
+            self._menue_anker = (int(maus_x), int(maus_y))
+        except (TypeError, ValueError):
+            self._menue_anker = (0, 0)
+        self._menue_lage[0] = self._menue_anker
+        self._menues = [self._menue_fenster(html, *self._menue_anker), None]
+        return self._menues[0] is not None
+
+    def menue_unter(self, html, links, oben):
+        """Untermenü neben dem Hauptmenü aufklappen.
+
+        Die Angaben sind Punkte innerhalb des Hauptmenüs; wo dessen Fenster
+        steht, weiß nur das Programm.
+        """
+        self.menue_unter_zu()
+        if self._menues[0] is None or not isinstance(html, str):
+            return False
+        # Die eigene Ecke ist gemerkt: ein noch verborgenes Fenster gibt seine
+        # Lage nicht zuverlässig heraus.
+        x = self._menue_lage[0][0] + int(links)
+        y = self._menue_lage[0][1] + int(oben)
+        self._menue_lage[1] = (x, y)
+        self._menues[1] = self._menue_fenster(html, x, y)
+        return self._menues[1] is not None
+
+    def menue_unter_zu(self):
+        """Untermenü schließen, Hauptmenü stehen lassen."""
+        fenster, self._menues[1] = self._menues[1], None
+        if fenster is not None:
+            try:
+                fenster.destroy()
+            except Exception:
+                pass
+        return True
+
+    def menue_groesse(self, ebene, breite, hoehe):
+        """Ein Menüfenster auf seinen Platzbedarf bringen und zeigen."""
+        try:
+            ebene, breite, hoehe = int(ebene), int(breite), int(hoehe)
+        except (TypeError, ValueError):
+            return False
+        if ebene not in (0, 1) or self._menues[ebene] is None:
+            return False
+
+        fenster = self._menues[ebene]
+        hwnd = self._handle_von(fenster)
+        if not hwnd:
+            return False
+        try:
+            from ctypes import wintypes
+            u = _user32()
+            griff = wintypes.HWND(hwnd)
+            # Ein Menü gehört nicht in die Taskleiste.
+            stil = u.GetWindowLongW(griff, GWL_EXSTYLE)
+            u.SetWindowLongW(griff, GWL_EXSTYLE, stil | WS_EX_TOOLWINDOW)
+        except Exception:
+            pass
+
+        self.client_setzen(breite, hoehe, hwnd)
+        # Einmal nachmessen und nachbessern: pywebview legt rahmenlose Fenster
+        # nicht immer in der angegebenen Größe an, und ein Menü, das schmaler
+        # ist als sein Fenster, ließe daneben eine leere Fläche stehen.
+        ist = self.client_lesen(hwnd)
+        if ist and ist != (breite, hoehe):
+            self.client_setzen(2 * breite - ist[0], 2 * hoehe - ist[1], hwnd)
+
+        x, y = self._menue_lage[ebene]
+        lage = sichtbare_lage({"x": x, "y": y, "breite": breite, "hoehe": hoehe},
+                              (breite, hoehe))
+        if lage:
+            try:
+                fenster.move(lage["x"], lage["y"])
+                self._menue_lage[ebene] = (lage["x"], lage["y"])
+            except Exception:
+                pass
+        try:
+            fenster.show()
+            return True
+        except Exception:
+            return False
+
+    def menue_blur(self):
+        """Menü schließen, wenn der Fokus ganz woanders liegt.
+
+        Beim Aufklappen eines Untermenüs verliert das Hauptmenü den Fokus an
+        das neue Fenster - dann darf nichts geschlossen werden.
+        """
+        def pruefen():
+            try:
+                from ctypes import wintypes
+                vorn = int(_user32().GetForegroundWindow() or 0)
+            except Exception:
+                return
+            eigene = {self._handle_von(f) for f in self._menues if f is not None}
+            if vorn not in eigene:
+                self.menue_schliessen()
+
+        uhr = threading.Timer(0.25, pruefen)
+        uhr.daemon = True
+        uhr.start()
+        return True
+
+    def menue_wahl(self, kennung):
+        """Getroffene Wahl an die Seite des Widgets weiterreichen.
+
+        Erst die Wahl weitergeben, dann die Menüfenster schließen: dieser
+        Aufruf kommt aus einem Menüfenster, und mit ihm fiele auch die
+        Brücke, über die er läuft.
+        """
+        if not isinstance(kennung, str) or len(kennung) > 60:
+            self.menue_schliessen()
+            return False
+        sicher = kennung.replace("\\", "").replace("'", "")
+        try:
+            self._fenster.run_js("menue_ausfuehren('%s');" % sicher)
+            ergebnis = True
+        except Exception:
+            ergebnis = False
+        uhr = threading.Timer(0.15, self.menue_schliessen)
+        uhr.daemon = True
+        uhr.start()
+        return ergebnis
+
+    def menue_schliessen(self):
+        """Alle Menüfenster schließen."""
+        fenster, self._menues = list(self._menues), [None, None]
+        for eines in fenster:
+            if eines is None:
+                continue
+            try:
+                eines.destroy()
+            except Exception:
+                pass
         return True
 
     # -- Über dieses Programm --------------------------------------------
