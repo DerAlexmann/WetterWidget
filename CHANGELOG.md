@@ -2,6 +2,29 @@
 
 Die Nummern folgen dem Muster `Haupt.Neben.Korrektur`.
 
+## 1.8.0
+
+- Das Programm sitzt im **Infobereich der Taskleiste** statt in der Taskleiste
+  selbst. Ein Widget läuft den ganzen Tag; ein Knopf in der Taskleiste wäre
+  dort nur im Weg. Das Fenster ist damit auch aus Alt+Tab heraus.
+- Das Symbol neben der Uhr trägt ein eigenes kleines Menü: *Widget anzeigen*
+  beziehungsweise *Widget ausblenden* - und *Beenden*. Ein Linksklick holt das
+  Widget hervor.
+- Der Mauszeiger auf dem Symbol zeigt Ort, Temperatur und Wetterlage. So steht
+  das Wetter auch dann zur Verfügung, wenn das Widget ausgeblendet ist.
+- Neuer Menüpunkt **Ausblenden** im Kontextmenü des Widgets.
+- Das Kreuz in der Titelleiste blendet das Widget nur noch aus, statt das
+  Programm zu beenden - ein versehentlicher Klick beendet damit nichts mehr.
+  Beendet wird über *Beenden* im Kontextmenü oder am Symbol.
+- Startet der Windows-Explorer neu, meldet das Programm sein Symbol von selbst
+  wieder an.
+- Behoben: War das Kontextmenü einmal benutzt worden, beendete *Beenden* das
+  Programm nicht mehr - das Widget verschwand, der Prozess lief unsichtbar
+  weiter. pywebview endet erst, wenn kein Fenster mehr offen ist; die
+  verborgenen Menüfenster und das Über-Fenster werden nun mitgeschlossen.
+  Der Fehler steckte schon in 1.7.0, war ohne Symbol im Infobereich aber
+  nur im Task-Manager zu bemerken.
+
 ## 1.7.0
 
 - Neue Darstellung **Leiste**: dieselbe Anzeige in einer Zeile, für den oberen

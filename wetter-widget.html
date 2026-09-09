@@ -677,6 +677,20 @@ function beenden(){
   if (api) { try { api.beenden(); } catch (e) {} }
 }
 
+/* Ausgeblendet läuft das Widget weiter und ist über sein Symbol im
+   Infobereich der Taskleiste wieder zu holen. */
+function ausblenden(){
+  const api = programm();
+  if (api && api.verstecken) { try { api.verstecken(); } catch (e) {} }
+}
+
+/* Kurztext für dieses Symbol: so steht das Wetter auch dann noch zur
+   Verfügung, wenn das Widget gerade ausgeblendet ist. */
+function hinweis_setzen(text){
+  const api = programm();
+  if (api && api.hinweis_setzen) { try { api.hinweis_setzen(text); } catch (e) {} }
+}
+
 /* ------------------------------------------------------------------------
    Fenster mit der Maus verschieben
 
@@ -884,7 +898,7 @@ function sprach_eintraege(){
    Untermenüs und eine Kennung. Aus derselben Beschreibung entsteht sowohl das
    Fenster-Menü des Programms als auch die eingebettete Fassung im Browser. */
 function menue_daten(){
-  return [
+  const eintraege = [
     { text: _("Aktualisieren"), unter: aktualisieren_eintraege() },
     { trenner: true },
     { text: _("Immer vorn"), haken: VORDERGRUND, id: "vorn" },
@@ -898,9 +912,13 @@ function menue_daten(){
     { text: _("Sprache"), unter: sprach_eintraege() },
     { trenner: true },
     { text: _("Mit Windows starten"), haken: AUTOSTART, id: "autostart" },
-    { text: _("Über"), id: "ueber" },
-    { text: _("Beenden"), id: "beenden" }
+    { text: _("Über"), id: "ueber" }
   ];
+  // Ausblenden setzt das Symbol im Infobereich voraus - im Browser wäre das
+  // Widget danach nicht wieder zu holen.
+  if (programm()) eintraege.push({ text: _("Ausblenden"), id: "ausblenden" });
+  eintraege.push({ text: _("Beenden"), id: "beenden" });
+  return eintraege;
 }
 
 /* Führt aus, was im Menü gewählt wurde. Wird auch vom Programm gerufen,
@@ -924,6 +942,7 @@ function menue_ausfuehren(kennung){
                         loadWeather(cityInput.value.trim()); break;
     case "autostart":   autostart_setzen(!AUTOSTART); break;
     case "ueber":       ueber_zeigen(); break;
+    case "ausblenden":  ausblenden(); break;
     case "beenden":     beenden(); break;
   }
 }
@@ -1123,6 +1142,9 @@ function ueber_rumpf(){
     + "Aufbau folgen der Bild-Toolbox und dem QR-Code-Generator.") + '</p>');
   teile.push('<p>' + _("Alle Einstellungen stehen im Kontextmenü - Rechtsklick auf die "
     + "Widgetfläche.") + '</p>');
+  teile.push('<p>' + _("Das Programm sitzt im Infobereich der Taskleiste, nicht in der "
+    + "Taskleiste selbst. Über sein Symbol neben der Uhr lässt sich das Widget "
+    + "ausblenden, wieder hervorholen und beenden.") + '</p>');
 
   teile.push('<h2>' + _("Datenquellen") + '</h2>');
   teile.push('<p>' + _("Messwerte und Vorhersage vom Deutschen Wetterdienst (DWD), "
@@ -1317,6 +1339,9 @@ function anzeigen(){
 
     ${kommend.length ? `<div class="forecast">${forecastHtml}</div>` : ''}
   `;
+
+  hinweis_setzen(loc.name + ' · ' + e.temperatur(w.temperature) + e.temperatur_zeichen
+                 + ' · ' + conditionText);
 }
 
 async function loadWeather(cityName){
@@ -1441,6 +1466,7 @@ var TRANSLATIONS = {
     "metrisch": "Metric",
     "imperial": "Imperial",
     "Sprache": "Language",
+    "Ausblenden": "Hide",
     "Beenden": "Quit",
 
     // --- Bedienung ------------------------------------------------------
@@ -1488,6 +1514,8 @@ var TRANSLATIONS = {
       "Shows the current readings and the forecast for the next few hours for a place in Germany. Colour scheme, language switching and layout follow the Bild-Toolbox and the QR code generator.",
     "Alle Einstellungen stehen im Kontextmenü - Rechtsklick auf die Widgetfläche.":
       "All settings live in the context menu - right-click the widget surface.",
+    "Das Programm sitzt im Infobereich der Taskleiste, nicht in der Taskleiste selbst. Über sein Symbol neben der Uhr lässt sich das Widget ausblenden, wieder hervorholen und beenden.":
+      "The program lives in the notification area, not on the taskbar itself. Its icon next to the clock hides the widget, brings it back and quits the program.",
     "Datenquellen": "Data sources",
     "Messwerte und Vorhersage vom Deutschen Wetterdienst (DWD), abgerufen über die Schnittstelle Bright Sky. Die Ortssuche liefert Open-Meteo. Beide Dienste sind ohne Schlüssel und ohne Anmeldung nutzbar; die Daten des DWD stehen unter der Datenlizenz Deutschland - Namensnennung 2.0.":
       "Readings and forecast from Germany's national weather service (DWD), retrieved through the Bright Sky interface. Place search is provided by Open-Meteo. Both services work without a key and without registration; the DWD data is published under the Data Licence Germany - Attribution 2.0.",

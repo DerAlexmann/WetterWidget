@@ -18,6 +18,7 @@ import json
 import os
 import sys
 import threading
+from ctypes import wintypes
 
 
 def _dpi_bewusstsein_setzen():
@@ -44,10 +45,14 @@ if sys.platform == "win32":
 import webview  # noqa: E402  - erst nach dem DPI-Setup importieren
 
 PROGRAMM = "Wetter Widget"
-VERSION = "1.7.0"
+VERSION = "1.8.0"
 CONFIG_NAME = "wetter-widget.json"
+ICON_NAME = "wetter_widget.ico"
 UEBER_TITEL = "Über " + PROGRAMM
 MENUE_TITEL = PROGRAMM + " - Menü"
+# Eigener Titel für das unsichtbare Fenster des Symbols: hieße es wie das
+# Widget, fände FindWindow das falsche der beiden.
+INFOBEREICH_TITEL = PROGRAMM + " - Infobereich"
 
 # Darstellungen und die Anzeigefläche, die jede von ihnen braucht - in
 # Punkten, also unabhängig von der Bildschirmskalierung. Gemeint ist die
@@ -272,6 +277,7 @@ WS_MINIMIZEBOX, WS_MAXIMIZEBOX, WS_SYSMENU = 0x00020000, 0x00010000, 0x00080000
 RAHMENBITS = WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU
 WS_EX_LAYERED = 0x00080000
 WS_EX_TOOLWINDOW = 0x00000080       # hält ein Fenster aus der Taskleiste
+WS_EX_APPWINDOW = 0x00040000        # ... und dieses Bit zwingt es hinein
 LWA_ALPHA = 0x00000002
 LWA_COLORKEY = 0x00000001
 SWP_NOSIZE, SWP_NOMOVE, SWP_NOZORDER = 0x0001, 0x0002, 0x0004
@@ -325,6 +331,50 @@ def _user32():
         u.AdjustWindowRectExForDpi.restype = wintypes.BOOL
     except AttributeError:
         pass
+
+    # Für das Symbol im Infobereich: ein unsichtbares Fenster mit eigener
+    # Nachrichtenschleife und ein Menü, das Windows selbst zeichnet.
+    u.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT,
+                                 wintypes.WPARAM, wintypes.LPARAM]
+    u.DefWindowProcW.restype = ctypes.c_ssize_t
+    u.RegisterClassW.restype = wintypes.ATOM
+    u.CreateWindowExW.argtypes = [wintypes.DWORD, wintypes.LPCWSTR,
+                                  wintypes.LPCWSTR, wintypes.DWORD,
+                                  ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                  ctypes.c_int, wintypes.HWND, wintypes.HMENU,
+                                  wintypes.HINSTANCE, wintypes.LPVOID]
+    u.CreateWindowExW.restype = wintypes.HWND
+    u.GetMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND,
+                              wintypes.UINT, wintypes.UINT]
+    u.GetMessageW.restype = ctypes.c_int
+    u.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT,
+                               wintypes.WPARAM, wintypes.LPARAM]
+    u.PostMessageW.restype = wintypes.BOOL
+    u.CreatePopupMenu.argtypes = []
+    u.CreatePopupMenu.restype = wintypes.HMENU
+    u.AppendMenuW.argtypes = [wintypes.HMENU, wintypes.UINT, ctypes.c_size_t,
+                              wintypes.LPCWSTR]
+    u.AppendMenuW.restype = wintypes.BOOL
+    u.DestroyMenu.argtypes = [wintypes.HMENU]
+    u.DestroyMenu.restype = wintypes.BOOL
+    u.TrackPopupMenu.argtypes = [wintypes.HMENU, wintypes.UINT, ctypes.c_int,
+                                 ctypes.c_int, ctypes.c_int, wintypes.HWND,
+                                 ctypes.c_void_p]
+    u.TrackPopupMenu.restype = ctypes.c_int
+    u.SetForegroundWindow.argtypes = [wintypes.HWND]
+    u.SetForegroundWindow.restype = wintypes.BOOL
+    u.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
+    u.GetCursorPos.restype = wintypes.BOOL
+    u.LoadImageW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR,
+                             wintypes.UINT, ctypes.c_int, ctypes.c_int,
+                             wintypes.UINT]
+    u.LoadImageW.restype = wintypes.HANDLE
+    u.LoadIconW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR]
+    u.LoadIconW.restype = wintypes.HICON
+    u.GetSystemMetrics.argtypes = [ctypes.c_int]
+    u.GetSystemMetrics.restype = ctypes.c_int
+    u.RegisterWindowMessageW.argtypes = [wintypes.LPCWSTR]
+    u.RegisterWindowMessageW.restype = wintypes.UINT
     _USER32 = u
     return u
 
@@ -351,6 +401,32 @@ def fenster_dpi(griff) -> int:
         return dpi if dpi > 0 else 96
     except (AttributeError, OSError, ValueError):
         return 96
+
+
+def aus_taskleiste_nehmen(hwnd) -> bool:
+    """Fenster aus der Taskleiste und aus Alt+Tab nehmen.
+
+    Ein Werkzeugfenster erscheint an beiden Stellen nicht. Das Widget steht
+    ohnehin den ganzen Tag auf dem Bildschirm und ist über sein Symbol im
+    Infobereich zu erreichen - der Knopf in der Taskleiste wäre dort nur im
+    Weg. Gesetzt werden muss der Stil, solange das Fenster noch verborgen
+    ist; an einem sichtbaren Fenster nimmt die Taskleiste ihn nicht mehr an.
+
+    WS_EX_APPWINDOW muss dabei weichen: WinForms setzt es von sich aus, und
+    es sticht das Werkzeugfenster aus - das Fenster bliebe sonst trotz allem
+    in der Taskleiste stehen.
+    """
+    if not hwnd:
+        return False
+    try:
+        u = _user32()
+        griff = wintypes.HWND(hwnd)
+        stil = u.GetWindowLongW(griff, GWL_EXSTYLE)
+        stil = (stil | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW
+        u.SetWindowLongW(griff, GWL_EXSTYLE, stil)
+        return True
+    except Exception:
+        return False
 
 
 def sichtbare_lage(lage: dict, vorgabe=None):
@@ -462,6 +538,309 @@ class Fensterablage:
         config_aendern(lambda daten: daten.__setitem__(schluessel, lage))
 
 
+# --------------------------------------------------------------------------
+# Symbol im Infobereich der Taskleiste
+#
+# Ein Widget läuft den ganzen Tag. Ein Knopf in der Taskleiste wäre dort nur
+# im Weg, deshalb hält sich das Programm im Infobereich neben der Uhr auf.
+# Von dort lässt sich das Widget hervorholen, ausblenden und beenden.
+#
+# Das Symbol braucht ein Fenster, an das Windows seine Mausmeldungen schicken
+# kann. Es entsteht unsichtbar in einem eigenen Faden mit eigener
+# Nachrichtenschleife: die des Widgets gehört pywebview, und wer sich dort
+# einhängt, hält im Zweifel die ganze Oberfläche an.
+# --------------------------------------------------------------------------
+
+WM_DESTROY, WM_CLOSE, WM_NULL = 0x0002, 0x0010, 0x0000
+WM_LBUTTONUP, WM_LBUTTONDBLCLK, WM_RBUTTONUP = 0x0202, 0x0203, 0x0205
+WM_CONTEXTMENU = 0x007B
+WM_INFOBEREICH = 0x8000 + 1             # WM_APP + 1: unsere eigene Meldung
+
+NIM_ADD, NIM_MODIFY, NIM_DELETE = 0, 1, 2
+NIF_MESSAGE, NIF_ICON, NIF_TIP = 0x01, 0x02, 0x04
+
+IMAGE_ICON, LR_LOADFROMFILE = 1, 0x0010
+SM_CXSMICON, SM_CYSMICON = 49, 50
+IDI_APPLICATION = 32512
+
+MF_STRING, MF_SEPARATOR = 0x0000, 0x0800
+TPM_RIGHTBUTTON, TPM_RETURNCMD = 0x0002, 0x0100
+BEFEHL_ZEIGEN, BEFEHL_ENDE = 1, 2
+
+# Die Beschriftungen des Symbolmenüs. Sie stehen hier und nicht in der
+# Sprachtabelle der HTML-Datei, weil dieses Menü auch aufgehen muss, wenn das
+# Widget ausgeblendet ist - dann ist keine Seite da, die man fragen könnte. Eine
+# neue Sprache gehört also an beide Stellen; fehlt sie hier, erscheint Deutsch.
+INFOBEREICH_TEXTE = {
+    "de": {"zeigen": "Widget anzeigen", "verstecken": "Widget ausblenden",
+           "beenden": "Beenden"},
+    "en": {"zeigen": "Show widget", "verstecken": "Hide widget",
+           "beenden": "Quit"},
+}
+
+# Fensterprozedur: Windows ruft sie mit Fenster, Meldung und zwei Werten auf.
+WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT,
+                             wintypes.WPARAM, wintypes.LPARAM)
+
+
+class WNDCLASSW(ctypes.Structure):
+    """Bauplan einer Fensterklasse, wie RegisterClassW ihn erwartet."""
+    _fields_ = [("style", wintypes.UINT),
+                ("lpfnWndProc", WNDPROC),
+                ("cbClsExtra", ctypes.c_int),
+                ("cbWndExtra", ctypes.c_int),
+                ("hInstance", wintypes.HINSTANCE),
+                ("hIcon", wintypes.HICON),
+                ("hCursor", wintypes.HANDLE),
+                ("hbrBackground", wintypes.HBRUSH),
+                ("lpszMenuName", wintypes.LPCWSTR),
+                ("lpszClassName", wintypes.LPCWSTR)]
+
+
+class NOTIFYICONDATAW(ctypes.Structure):
+    """Beschreibt das Symbol für Shell_NotifyIcon.
+
+    Der Aufbau stammt aus shellapi.h und darf nicht gekürzt werden: Windows
+    liest cbSize und erwartet dahinter genau diese Felder in dieser Folge.
+    """
+    _fields_ = [("cbSize", wintypes.DWORD),
+                ("hWnd", wintypes.HWND),
+                ("uID", wintypes.UINT),
+                ("uFlags", wintypes.UINT),
+                ("uCallbackMessage", wintypes.UINT),
+                ("hIcon", wintypes.HICON),
+                ("szTip", wintypes.WCHAR * 128),
+                ("dwState", wintypes.DWORD),
+                ("dwStateMask", wintypes.DWORD),
+                ("szInfo", wintypes.WCHAR * 256),
+                ("uVersion", wintypes.UINT),
+                ("szInfoTitle", wintypes.WCHAR * 64),
+                ("dwInfoFlags", wintypes.DWORD),
+                ("guidItem", ctypes.c_byte * 16),
+                ("hBalloonIcon", wintypes.HICON)]
+
+
+_SHELL32 = None
+def _shell32():
+    """shell32 mit eigenen Signaturen - aus demselben Grund wie bei user32."""
+    global _SHELL32
+    if _SHELL32 is not None:
+        return _SHELL32
+    s = ctypes.WinDLL("shell32", use_last_error=True)
+    s.Shell_NotifyIconW.argtypes = [wintypes.DWORD,
+                                    ctypes.POINTER(NOTIFYICONDATAW)]
+    s.Shell_NotifyIconW.restype = wintypes.BOOL
+    s.ExtractIconExW.argtypes = [wintypes.LPCWSTR, ctypes.c_int,
+                                 ctypes.POINTER(wintypes.HICON),
+                                 ctypes.POINTER(wintypes.HICON), wintypes.UINT]
+    s.ExtractIconExW.restype = wintypes.UINT
+    _SHELL32 = s
+    return s
+
+
+class Infobereich:
+    """Das Symbol neben der Uhr samt seinem kleinen Menü.
+
+    Drei Rückrufe verbinden es mit dem Widget: ob dieses gerade zu sehen ist,
+    wie es gezeigt und ausgeblendet wird und wie das Programm endet. Vom Fenster
+    des Widgets weiß der Infobereich selbst nichts.
+    """
+
+    KLASSE = "WetterWidgetInfobereich"
+
+    def __init__(self, ist_sichtbar, sichtbarkeit_setzen, beenden):
+        self._ist_sichtbar = ist_sichtbar
+        self._sichtbarkeit_setzen = sichtbarkeit_setzen
+        self._beenden = beenden
+        self._hwnd = 0
+        self._symbol = None
+        self._hinweis = PROGRAMM
+        self._bereit = threading.Event()
+        # Verweise auf Rückruf und Klasse müssen bleiben: gibt Python sie
+        # frei, ruft Windows später ins Leere.
+        self._proc = None
+        self._klasse = None
+        self._neustart = 0                  # Meldung "TaskbarCreated"
+
+    # -- Aufbau und Abbau ------------------------------------------------
+
+    def starten(self) -> bool:
+        faden = threading.Thread(target=self._laufen, name="Infobereich",
+                                 daemon=True)
+        faden.start()
+        self._bereit.wait(5)
+        return bool(self._hwnd)
+
+    def entfernen(self):
+        """Symbol abmelden und die Nachrichtenschleife beenden."""
+        if not self._hwnd:
+            return
+        self._symbol_melden(NIM_DELETE)
+        try:
+            _user32().PostMessageW(wintypes.HWND(self._hwnd), WM_CLOSE, 0, 0)
+        except Exception:
+            pass
+        self._hwnd = 0
+
+    def hinweis_setzen(self, text) -> bool:
+        """Text, den Windows beim Zeigen auf das Symbol einblendet."""
+        text = (text or PROGRAMM).strip()
+        if not text or text == self._hinweis:
+            return False
+        self._hinweis = text[:127]          # szTip fasst 128 Zeichen samt Null
+        return self._symbol_melden(NIM_MODIFY)
+
+    # -- Das unsichtbare Fenster -----------------------------------------
+
+    def _laufen(self):
+        try:
+            self._fenster_anlegen()
+            if self._hwnd:
+                self._symbol_melden(NIM_ADD)
+        except Exception:
+            self._hwnd = 0
+        finally:
+            self._bereit.set()
+        if not self._hwnd:
+            return
+
+        u = _user32()
+        nachricht = wintypes.MSG()
+        while True:
+            try:
+                weiter = u.GetMessageW(ctypes.byref(nachricht), None, 0, 0)
+            except Exception:
+                break
+            if weiter <= 0:                 # 0 = WM_QUIT, -1 = Fehler
+                break
+            u.TranslateMessage(ctypes.byref(nachricht))
+            u.DispatchMessageW(ctypes.byref(nachricht))
+
+    def _fenster_anlegen(self):
+        u = _user32()
+        self._proc = WNDPROC(self._melden)
+        # Startet der Explorer neu - etwa nach einem Absturz -, ist der
+        # Infobereich leer. Windows sagt allen Programmen Bescheid, damit sie
+        # ihr Symbol erneut anmelden.
+        self._neustart = int(u.RegisterWindowMessageW("TaskbarCreated") or 0)
+
+        klasse = WNDCLASSW()
+        klasse.lpfnWndProc = self._proc
+        klasse.hInstance = ctypes.windll.kernel32.GetModuleHandleW(None)
+        klasse.lpszClassName = self.KLASSE
+        u.RegisterClassW(ctypes.byref(klasse))
+        self._klasse = klasse
+
+        self._symbol = self._symbol_laden()
+        self._hwnd = int(u.CreateWindowExW(
+            WS_EX_TOOLWINDOW, self.KLASSE, INFOBEREICH_TITEL, 0,
+            0, 0, 0, 0, None, None, klasse.hInstance, None) or 0)
+
+    def _melden(self, hwnd, meldung, wparam, lparam):
+        """Fensterprozedur - läuft im Faden des Infobereichs."""
+        try:
+            if meldung == WM_INFOBEREICH:
+                # Welcher Mausklick es war, steht in den unteren Bits.
+                ereignis = lparam & 0xFFFF
+                if ereignis in (WM_LBUTTONUP, WM_LBUTTONDBLCLK):
+                    self._sichtbarkeit_setzen(True)
+                elif ereignis in (WM_RBUTTONUP, WM_CONTEXTMENU):
+                    self._menue_zeigen()
+                return 0
+            if meldung == WM_DESTROY:
+                _user32().PostQuitMessage(0)
+                return 0
+            if self._neustart and meldung == self._neustart:
+                self._symbol_melden(NIM_ADD)
+                return 0
+        except Exception:
+            pass
+        return _user32().DefWindowProcW(hwnd, meldung, wparam, lparam)
+
+    # -- Symbol ----------------------------------------------------------
+
+    def _symbol_laden(self):
+        """Programmsymbol in der Größe, die der Infobereich zeigt."""
+        u = _user32()
+        breite = u.GetSystemMetrics(SM_CXSMICON) or 16
+        hoehe = u.GetSystemMetrics(SM_CYSMICON) or 16
+        try:
+            pfad = resource_path(ICON_NAME)
+            if os.path.exists(pfad):
+                symbol = u.LoadImageW(None, pfad, IMAGE_ICON, breite, hoehe,
+                                      LR_LOADFROMFILE)
+                if symbol:
+                    return symbol
+        except Exception:
+            pass
+        try:            # in der EXE steckt dasselbe Symbol noch einmal
+            klein = wintypes.HICON()
+            _shell32().ExtractIconExW(sys.executable, 0, None,
+                                      ctypes.byref(klein), 1)
+            if klein:
+                return klein
+        except Exception:
+            pass
+        try:
+            return u.LoadIconW(None, ctypes.cast(ctypes.c_void_p(IDI_APPLICATION),
+                                                 wintypes.LPCWSTR))
+        except Exception:
+            return None
+
+    def _symbol_melden(self, was) -> bool:
+        if not self._hwnd:
+            return False
+        daten = NOTIFYICONDATAW()
+        daten.cbSize = ctypes.sizeof(NOTIFYICONDATAW)
+        daten.hWnd = wintypes.HWND(self._hwnd)
+        daten.uID = 1
+        daten.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP
+        daten.uCallbackMessage = WM_INFOBEREICH
+        daten.hIcon = self._symbol
+        daten.szTip = self._hinweis
+        try:
+            return bool(_shell32().Shell_NotifyIconW(was, ctypes.byref(daten)))
+        except Exception:
+            return False
+
+    # -- Menü ------------------------------------------------------------
+
+    def _menue_zeigen(self):
+        """Menü des Symbols: Widget holen oder ausblenden - und beenden."""
+        u = _user32()
+        texte = INFOBEREICH_TEXTE.get(load_config().get("sprache"),
+                                      INFOBEREICH_TEXTE["de"])
+        sichtbar = bool(self._ist_sichtbar())
+        menue = u.CreatePopupMenu()
+        if not menue:
+            return
+        wahl = 0
+        try:
+            u.AppendMenuW(menue, MF_STRING, BEFEHL_ZEIGEN,
+                          texte["verstecken"] if sichtbar else texte["zeigen"])
+            u.AppendMenuW(menue, MF_SEPARATOR, 0, None)
+            u.AppendMenuW(menue, MF_STRING, BEFEHL_ENDE, texte["beenden"])
+
+            zeiger = wintypes.POINT()
+            u.GetCursorPos(ctypes.byref(zeiger))
+            # Ohne diesen Schritt bliebe das Menü stehen, wenn der Anwender
+            # daneben klickt - so verlangt es die Windows-Dokumentation.
+            u.SetForegroundWindow(wintypes.HWND(self._hwnd))
+            wahl = int(u.TrackPopupMenu(menue, TPM_RIGHTBUTTON | TPM_RETURNCMD,
+                                        zeiger.x, zeiger.y, 0,
+                                        wintypes.HWND(self._hwnd), None))
+            u.PostMessageW(wintypes.HWND(self._hwnd), WM_NULL, 0, 0)
+        except Exception:
+            return
+        finally:
+            u.DestroyMenu(menue)
+
+        if wahl == BEFEHL_ZEIGEN:
+            self._sichtbarkeit_setzen(not sichtbar)
+        elif wahl == BEFEHL_ENDE:
+            self._beenden()
+
+
 class Api:
     """Was die Oberfläche aufrufen darf: window.pywebview.api....
 
@@ -488,6 +867,9 @@ class Api:
         self._menue_anker = (0, 0)          # Mauszeiger beim Aufklappen
         self._hwnd = 0
         self._griff = None                  # Abstand Mauszeiger -> Fensterecke
+        self._infobereich = None            # Symbol neben der Uhr
+        self._sichtbar = True               # Widget zu sehen oder ausgeblendet?
+        self._beendet = False               # wird gerade wirklich beendet?
 
     # -- Einstellungen ---------------------------------------------------
 
@@ -653,6 +1035,39 @@ class Api:
     def autostart_setzen(self, an):
         """Widget in den Autostart von Windows eintragen oder daraus lösen."""
         return autostart_setzen(bool(an))
+
+    # -- Ausblenden und Hervorholen --------------------------------------
+
+    def sichtbarkeit_setzen(self, an):
+        """Widget zeigen oder in den Infobereich ausblenden.
+
+        Ausgeblendet läuft das Programm weiter - es hat dann kein Fenster
+        mehr, nur noch das Symbol neben der Uhr.
+        """
+        an = bool(an)
+        try:
+            if an:
+                self._fenster.show()
+            else:
+                self._fenster.hide()
+        except Exception:
+            return False
+        self._sichtbar = an
+        return True
+
+    def verstecken(self):
+        """Vom Kontextmenü des Widgets aus ausblenden."""
+        return self.sichtbarkeit_setzen(False)
+
+    def hinweis_setzen(self, text):
+        """Kurztext für das Symbol im Infobereich.
+
+        So steht das Wetter auch dann noch zur Verfügung, wenn das Widget
+        ausgeblendet ist - der Mauszeiger auf dem Symbol genügt.
+        """
+        if self._infobereich is None or not isinstance(text, str):
+            return False
+        return self._infobereich.hinweis_setzen(text[:127])
 
     # -- Anzeigefläche und Darstellung -----------------------------------
 
@@ -970,7 +1385,33 @@ class Api:
             return False
 
     def beenden(self):
-        """Widget schließen - ohne Titelleiste der einzige Weg im Fenster."""
+        """Programm wirklich beenden - Fenster und Symbol verschwinden.
+
+        Der Merker unterscheidet dieses Beenden vom Kreuz in der Titelleiste,
+        das das Widget nur ausblendet.
+        """
+        self._beendet = True
+        if self._infobereich is not None:
+            self._infobereich.entfernen()
+
+        # Menü- und Über-Fenster sind eigene pywebview-Fenster. Bleibt eines
+        # davon stehen - und sei es nur verborgen -, endet die Oberfläche
+        # nicht: pywebview beendet sich erst, wenn kein Fenster mehr offen
+        # ist. Das Widget verschwände, das Programm liefe unsichtbar weiter.
+        #
+        # Geschlossen werden sie über WM_CLOSE und nicht über destroy():
+        # destroy() wartet auf das erste Zeigen des Fensters, und ein Menü,
+        # das angelegt, aber noch nie gezeigt wurde, ließe das Beenden
+        # zwanzig Sekunden lang hängen.
+        for weiteres in list(self._menues) + [self._ueber]:
+            griff = self._handle_von(weiteres) if weiteres is not None else 0
+            if not griff:
+                continue
+            try:
+                _user32().PostMessageW(wintypes.HWND(griff), WM_CLOSE, 0, 0)
+            except Exception:
+                pass
+
         try:
             self._fenster.destroy()
             return True
@@ -1033,6 +1474,21 @@ def main():
     fenster.events.resized += ablage.merken
     fenster.events.closing += ablage.schreiben
 
+    def beim_schliessen():
+        """Das Kreuz in der Titelleiste legt das Widget nur ab.
+
+        Ein Programm, das den ganzen Tag laufen soll, wäre mit einem
+        versehentlichen Klick sonst weg. Beendet wird über das Kontextmenü
+        des Widgets oder über das Symbol im Infobereich - erst dann steht der
+        Merker. Ein False hält das Schließen an, so sieht es pywebview vor.
+        """
+        if api._beendet:
+            return True
+        api.sichtbarkeit_setzen(False)
+        return False
+
+    fenster.events.closing += beim_schliessen
+
     fertig = threading.Event()
 
     def beim_laden():
@@ -1044,6 +1500,7 @@ def main():
         if fertig.is_set():
             return
         fertig.set()
+        aus_taskleiste_nehmen(api._fensterhandle())
         if rahmenlos:
             api.rahmen_setzen(True)
         api.client_setzen(breite, hoehe)
@@ -1056,7 +1513,16 @@ def main():
 
     fenster.events.loaded += beim_laden
 
+    # Das Symbol steht schon bereit, bevor das Fenster erscheint - so ist das
+    # Programm von der ersten Sekunde an erreichbar.
+    infobereich = Infobereich(lambda: api._sichtbar,
+                              api.sichtbarkeit_setzen,
+                              api.beenden)
+    api._infobereich = infobereich
+    infobereich.starten()
+
     webview.start()
+    infobereich.entfernen()
 
 
 if __name__ == "__main__":

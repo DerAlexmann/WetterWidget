@@ -15,6 +15,7 @@ py -3 --version >nul 2>nul || set "PY=python"
   --name "WetterWidget" ^
   --icon "wetter_widget.ico" ^
   --add-data "wetter-widget.html;." ^
+  --add-data "wetter_widget.ico;." ^
   wetter_widget.py
 
 if errorlevel 1 (

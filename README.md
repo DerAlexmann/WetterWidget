@@ -68,7 +68,8 @@ Im Fenster stehen nur das Ortsfeld und die Anzeige. Alles andere liegt im
 | Sprache ▸ | Deutsch, English |
 | Mit Windows starten | Eintrag im Autostart anlegen oder entfernen |
 | Über | Fassung, Datenquellen, Lizenz und Copyright |
-| Beenden | Widget schließen |
+| Ausblenden | Widget in den Infobereich zurückziehen |
+| Beenden | Programm beenden - Fenster und Symbol verschwinden |
 
 Verschoben wird das Widget, indem man es auf seiner Fläche anfasst und
 zieht - das funktioniert mit und ohne Rahmen. Das Ortsfeld und die Schaltfläche
@@ -103,8 +104,8 @@ keine 80 Punkte Höhe zur Verfügung.
 Text kein Platz, und auch als Karte liest er sich dort besser.
 
 **Transparenz** endet bei 90 % und nicht bei 100 %: ein vollständig
-durchsichtiges Fenster wäre unsichtbar und nur noch über die Taskleiste zu
-fassen. Wer die letzte Stufe dennoch möchte, ergänzt sie in
+durchsichtiges Fenster wäre unsichtbar und nur noch über das Symbol im
+Infobereich zu fassen. Wer die letzte Stufe dennoch möchte, ergänzt sie in
 `TRANSPARENZSTUFEN` - in `wetter_widget.py` und in `wetter-widget.html`.
 
 **Verriegelt** sperrt das Ziehen auf der Widgetfläche. Läuft das Widget mit
@@ -113,9 +114,32 @@ nicht ohne Weiteres aus der Hand; das Fenster springt dann nach dem Loslassen
 an seinen Platz zurück. Ohne Rahmen sitzt es vollständig fest.
 
 **Rahmenlos** heißt zugleich: keine Titelleiste zum Schließen. Dafür gibt es
-*Beenden* im Kontextmenü; zusätzlich bleibt der Eintrag in der Taskleiste als
+*Beenden* im Kontextmenü; zusätzlich bleibt das Symbol im Infobereich als
 Notausgang erhalten. Beim Umschalten bleibt die Anzeigefläche gleich groß -
 der Rahmen kommt außen hinzu und geht außen weg, der Inhalt verrutscht nicht.
+
+## Im Infobereich statt in der Taskleiste
+
+Ein Widget läuft den ganzen Tag - ein Knopf in der Taskleiste wäre dort nur im
+Weg. Das Programm zeigt sich deshalb als **Symbol neben der Uhr**; das
+Widgetfenster erscheint weder in der Taskleiste noch in Alt+Tab.
+
+| Am Symbol | Wirkung |
+|---|---|
+| Linksklick | Widget hervorholen und nach vorn stellen |
+| Rechtsklick | *Widget anzeigen* beziehungsweise *Widget ausblenden* - und *Beenden* |
+| Mauszeiger darauf | Ort, Temperatur und Wetterlage als Kurztext |
+
+Der Kurztext wird nach jedem Abruf nachgeführt: das Wetter steht damit auch
+dann zur Verfügung, wenn das Widget gerade ausgeblendet ist.
+
+Das **Kreuz in der Titelleiste blendet das Widget nur aus**, es beendet das
+Programm nicht - ein versehentlicher Klick ist damit kein Malheur mehr.
+Beendet wird über *Beenden*, im Kontextmenü des Widgets oder am Symbol.
+
+Startet der Windows-Explorer neu, etwa nach einem Absturz, ist der Infobereich
+leer. Windows sagt allen Programmen Bescheid; das Widget meldet sein Symbol
+daraufhin von selbst wieder an.
 
 ## Was sich das Programm merkt
 
@@ -207,8 +231,8 @@ ein eigenes Schema entsteht durch einen weiteren Eintrag mit denselben Namen.
 | Datei | Zweck |
 |---|---|
 | `wetter-widget.html` | Oberfläche, Farbpaletten, Sprachtabelle, Kontextmenü und Wetterabruf |
-| `wetter_widget.py` | Fensterrahmen, Einstellungen, Fensterlage, Rahmen/Transparenz/Vordergrund |
-| `wetter_widget.ico` | Programmsymbol |
+| `wetter_widget.py` | Fensterrahmen, Einstellungen, Fensterlage, Rahmen/Transparenz/Vordergrund, Infobereich |
+| `wetter_widget.ico` | Programmsymbol - auch das Symbol im Infobereich, deshalb liegt es mit in der .exe |
 | `build.cmd` | Baut die .exe neu |
 | `requirements.txt` | Benötigte Pakete |
 | `docs/` | Bildschirmfotos für diese Seite |
@@ -256,6 +280,18 @@ man die Signaturen an `ctypes.windll.user32` setzen, gälten sie im ganzen
 Programm - auch für pywebview, dessen eigenes Fenster-Verschieben dieselbe
 Funktion ruft.
 
+Das Symbol im Infobereich hängt an einem unsichtbaren Fenster mit **eigener
+Nachrichtenschleife in einem eigenen Faden**: die Schleife des Widgets gehört
+pywebview, und wer sich dort einhängt, hält im Zweifel die Oberfläche an. Sein
+Menü zeichnet Windows selbst (`TrackPopupMenu`) - anders als das Kontextmenü
+des Widgets, das eine HTML-Seite ist und deshalb die Farben des Widgets trägt.
+
+Damit das Widgetfenster aus der Taskleiste verschwindet, genügt
+`WS_EX_TOOLWINDOW` nicht: WinForms setzt von sich aus `WS_EX_APPWINDOW`, und
+dieses Bit sticht das Werkzeugfenster aus. Beide Stile werden gesetzt, solange
+das Fenster noch verborgen ist - an einem sichtbaren Fenster nimmt die
+Taskleiste die Änderung nicht mehr an.
+
 ## English summary
 
 A weather widget for the Windows desktop, showing current readings and the
@@ -269,6 +305,12 @@ unless told otherwise) and offers metric or imperial units, independently of
 the language. Everything else lives in the context menu - right-click the
 widget: refresh interval, always on top, frameless, locked in place,
 transparency, dark or light scheme, start with Windows, and about.
+
+The program lives in the **notification area** next to the clock rather than
+on the taskbar, as a widget tends to stay open all day. Its icon shows the
+current reading as a tooltip; a left click brings the widget back, a right
+click offers *Show widget* / *Hide widget* and *Quit*. The window's close
+button only hides the widget.
 
 Grab `WetterWidget.exe` from the [releases](../../releases) page, put it
 somewhere permanent and double-click it. Settings are stored in
