@@ -39,6 +39,13 @@ Die fertige `WetterWidget.exe` liegt unter
 doppelklicken. Weder eine Installation noch eine Python-Umgebung sind auf dem
 Zielrechner nötig, alles steckt in dieser einen Datei.
 
+Beim ersten Start meldet sich möglicherweise der SmartScreen-Filter, und
+mancher Virenscanner nimmt die Datei vorsorglich beiseite. Beides trifft eine
+unsignierte Datei, die noch kaum jemand heruntergeladen hat; mit PyInstaller
+gebaute Programme geraten regelmäßig in diese Lage. Wer nicht darauf vertrauen
+möchte, baut die .exe mit `build.cmd` in einem Zug selbst - der vollständige
+Quelltext liegt hier.
+
 Wer lieber aus der Quelle startet:
 
 ```
