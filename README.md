@@ -1,5 +1,7 @@
 # Wetter Widget
 
+[![CI](https://github.com/DerAlexmann/WetterWidget/actions/workflows/ci.yml/badge.svg)](https://github.com/DerAlexmann/WetterWidget/actions/workflows/ci.yml)
+
 Ein Wetter-Widget für den Windows-Desktop: aktuelle Messwerte und die
 Vorhersage der nächsten Stunden für einen Ort in Deutschland, wahlweise
 rahmenlos, durchscheinend und immer im Vordergrund.
@@ -39,12 +41,16 @@ Die fertige `WetterWidget.exe` liegt unter
 doppelklicken. Weder eine Installation noch eine Python-Umgebung sind auf dem
 Zielrechner nötig, alles steckt in dieser einen Datei.
 
-Beim ersten Start meldet sich möglicherweise der SmartScreen-Filter, und
-mancher Virenscanner nimmt die Datei vorsorglich beiseite. Beides trifft eine
-unsignierte Datei, die noch kaum jemand heruntergeladen hat; mit PyInstaller
-gebaute Programme geraten regelmäßig in diese Lage. Wer nicht darauf vertrauen
-möchte, baut die .exe mit `build.cmd` in einem Zug selbst - der vollständige
-Quelltext liegt hier.
+> **Beim ersten Start**: Die EXE ist nicht signiert. Windows SmartScreen
+> fragt deshalb einmalig nach - „Weitere Informationen" → „Trotzdem
+> ausführen". Auch ein Virenschutz hält eine frisch heruntergeladene,
+> unbekannte Datei gern für ein paar Sekunden fest, während er sie prüft; ein
+> Startversuch in dieser Zeit kann mit „Zugriff verweigert" abbrechen.
+> Einfach kurz warten und erneut starten. Wer sichergehen will, vergleicht
+> vorher die SHA-256-Prüfsumme aus den Release-Notizen.
+
+Wer nicht darauf vertrauen möchte, baut die .exe mit `build.cmd` in einem Zug
+selbst - der vollständige Quelltext liegt hier.
 
 Wer lieber aus der Quelle startet:
 
@@ -52,10 +58,6 @@ Wer lieber aus der Quelle startet:
 pip install -r requirements.txt
 python wetter_widget.py
 ```
-
-Aussehen und Bedienung folgen der Bild-Toolbox und dem QR-Code-Generator:
-dieselben Farbpaletten hell und dunkel, dieselbe Sprachumschaltung mit
-Deutsch als Quellsprache.
 
 ## Bedienung
 
@@ -242,6 +244,9 @@ ein eigenes Schema entsteht durch einen weiteren Eintrag mit denselben Namen.
 | `wetter_widget.ico` | Programmsymbol - auch das Symbol im Infobereich, deshalb liegt es mit in der .exe |
 | `build.cmd` | Baut die .exe neu |
 | `requirements.txt` | Benötigte Pakete |
+| `requirements-dev.txt` | Nur zum Prüfen: Ruff |
+| `pyproject.toml` | Eckdaten des Projekts und die Ruff-Einstellungen |
+| `.github/workflows/ci.yml` | Prüft bei jedem Push Stil und Übersetzbarkeit |
 | `docs/` | Bildschirmfotos für diese Seite |
 | `dist\WetterWidget.exe` | Das fertige Programm, entsteht beim Bauen (ca. 15 MB) |
 | `wetter-widget.json` | Gespeicherter Zustand, entsteht neben der .exe beim ersten Lauf |
@@ -272,6 +277,20 @@ Beenden und das Speichern; Anzeige, Menü und Sprachumschaltung funktionieren.
 
 Fenstergröße und Vorgabeschema stehen in `wetter_widget.py` unter
 `FENSTER_BREITE`, `FENSTER_HOEHE` und `DEFAULT_THEME`.
+
+### Vor dem Einchecken
+
+```
+pip install -r requirements-dev.txt
+ruff check .
+```
+
+Dieselbe Prüfung läuft bei jedem Push in der CI, zusammen mit einem
+Übersetzungslauf gegen Python 3.10 und 3.12. Die Regeln stehen in
+`pyproject.toml`: Zeilenlänge 100, Ziel `py310`, dazu `E, W, F, I, B, C4, UP,
+RET`. Tests gibt es keine - die Oberfläche steckt in der HTML-Datei, das
+Übrige ruft Windows-Funktionen, die sich auf einem Läufer nicht nachstellen
+lassen.
 
 ## Technische Anmerkungen
 

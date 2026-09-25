@@ -15,9 +15,8 @@
   /* ----------------------------------------------------------------------
      Farbwerte
 
-     Die Namen entsprechen den Rollen aus der Bild-Toolbox und dem
-     QR-Code-Generator, damit alle Programme gleich aussehen. Die Werte hier
-     sind nur die Startfarben (dunkles Schema) - beim Umschalten schreibt
+     Die Namen sind die Farbrollen des Hausstils. Die Werte hier sind nur
+     die Startfarben (dunkles Schema) - beim Umschalten schreibt
      thema_anwenden() die Palette aus THEMES in genau diese Variablen.
      ---------------------------------------------------------------------- */
   :root{
@@ -433,9 +432,9 @@
 /* ------------------------------------------------------------------------
    Farbschemata
 
-   Dieselben Paletten wie in der Bild-Toolbox und im QR-Code-Generator,
-   beschränkt auf die Rollen, die dieses Widget verwendet. Ein eigenes Schema
-   entsteht durch einen weiteren Eintrag mit denselben Rollennamen.
+   Die Paletten des Hausstils, beschränkt auf die Rollen, die dieses Widget
+   verwendet. Ein eigenes Schema entsteht durch einen weiteren Eintrag mit
+   denselben Rollennamen.
    ------------------------------------------------------------------------ */
 const THEMES = {
   light: {
@@ -1125,9 +1124,8 @@ function menue_einrichten(){
 /* ------------------------------------------------------------------------
    Über dieses Programm
 
-   Lizenz- und Copyrightzeile stehen wortgleich in der Bild-Toolbox und im
-   QR-Code-Generator; der Hinweis auf die KI-Unterstützung gehört überall
-   dorthin, wo der Copyright-Vermerk auftaucht.
+   Der Hinweis auf die KI-Unterstützung gehört überall dorthin, wo der
+   Copyright-Vermerk auftaucht.
    ------------------------------------------------------------------------ */
 const LIZENZ = "Licensed under MIT License\n"
              + "Copyright 2026 Alexander Unverhau\n"
@@ -1138,8 +1136,7 @@ function ueber_rumpf(){
   teile.push('<h1>' + _("Wetter Widget") + '</h1>');
   teile.push('<div class="fassung">' + _("Fassung {nummer}", {nummer: FASSUNG}) + '</div>');
   teile.push('<p>' + _("Zeigt die aktuellen Messwerte und die Vorhersage der nächsten "
-    + "Stunden für einen Ort in Deutschland. Farbschema, Sprachumschaltung und "
-    + "Aufbau folgen der Bild-Toolbox und dem QR-Code-Generator.") + '</p>');
+    + "Stunden für einen Ort in Deutschland.") + '</p>');
   teile.push('<p>' + _("Alle Einstellungen stehen im Kontextmenü - Rechtsklick auf die "
     + "Widgetfläche.") + '</p>');
   teile.push('<p>' + _("Das Programm sitzt im Infobereich der Taskleiste, nicht in der "
@@ -1510,8 +1507,8 @@ var TRANSLATIONS = {
     // --- Über dieses Programm -------------------------------------------
     "Wetter Widget": "Weather Widget",
     "Fassung {nummer}": "Version {nummer}",
-    "Zeigt die aktuellen Messwerte und die Vorhersage der nächsten Stunden für einen Ort in Deutschland. Farbschema, Sprachumschaltung und Aufbau folgen der Bild-Toolbox und dem QR-Code-Generator.":
-      "Shows the current readings and the forecast for the next few hours for a place in Germany. Colour scheme, language switching and layout follow the Bild-Toolbox and the QR code generator.",
+    "Zeigt die aktuellen Messwerte und die Vorhersage der nächsten Stunden für einen Ort in Deutschland.":
+      "Shows the current readings and the forecast for the next few hours for a place in Germany.",
     "Alle Einstellungen stehen im Kontextmenü - Rechtsklick auf die Widgetfläche.":
       "All settings live in the context menu - right-click the widget surface.",
     "Das Programm sitzt im Infobereich der Taskleiste, nicht in der Taskleiste selbst. Über sein Symbol neben der Uhr lässt sich das Widget ausblenden, wieder hervorholen und beenden.":

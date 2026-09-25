@@ -1,0 +1,2 @@
+# Zum Entwickeln und Prüfen. Für den Betrieb wird nichts davon gebraucht.
+ruff>=0.6

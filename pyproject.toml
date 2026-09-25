@@ -1,0 +1,26 @@
+[project]
+name = "wetter-widget"
+version = "1.8.0"
+description = "Wetter-Widget für den Windows-Desktop mit Messwerten und Vorhersage des DWD"
+readme = "README.md"
+# Das Programm selbst käme mit weniger aus; geprüft wird gegen 3.10 und 3.12.
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Alexander Unverhau" }]
+dependencies = ["pywebview>=5.0"]      # zum Bauen der EXE siehe requirements.txt
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle - Fehler
+    "W",    # pycodestyle - Warnungen
+    "F",    # Pyflakes
+    "I",    # isort - Importreihenfolge
+    "B",    # flake8-bugbear - typische Fallstricke
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade - veraltete Schreibweisen
+    "RET",  # flake8-return
+]

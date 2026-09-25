@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags-ignore: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stil:
+    name: Stil (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+
+  uebersetzen:
+    name: Übersetzen (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      # Tests gibt es keine - die Oberfläche steckt in der HTML-Datei und das
+      # Übrige ruft Windows-Funktionen. Geprüft wird deshalb nur, ob sich die
+      # Programmdatei übersetzen lässt; pywebview muss dafür nicht installiert
+      # sein, denn py_compile führt nichts aus.
+      - run: python -m py_compile wetter_widget.py

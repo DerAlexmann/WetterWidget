@@ -154,14 +154,14 @@ def save_config(daten: dict) -> bool:
 def autostart_befehl() -> str:
     """Befehlszeile, die Windows beim Anmelden ausführen soll."""
     if ist_eingefroren():
-        return '"%s"' % os.path.abspath(sys.executable)
+        return f'"{os.path.abspath(sys.executable)}"'
     # Als Skript: pythonw.exe, sonst erschiene bei jeder Anmeldung ein
     # Konsolenfenster hinter dem Widget.
     ordner = os.path.dirname(os.path.abspath(sys.executable))
     pythonw = os.path.join(ordner, "pythonw.exe")
     if not os.path.exists(pythonw):
         pythonw = sys.executable
-    return '"%s" "%s"' % (pythonw, os.path.abspath(__file__))
+    return f'"{pythonw}" "{os.path.abspath(__file__)}"'
 
 
 def autostart_lesen() -> bool:
@@ -257,8 +257,8 @@ def seite_bauen(einstellungen: dict) -> str:
         startwerte["intervall"] = einstellungen["intervall"]
     startwerte["autostart"] = autostart_lesen()
     startwerte["version"] = VERSION
-    einbau = "<script>window.WIDGET_CONFIG = %s;</script>\n</head>" % json.dumps(
-        startwerte, ensure_ascii=False)
+    daten = json.dumps(startwerte, ensure_ascii=False)
+    einbau = f"<script>window.WIDGET_CONFIG = {daten};</script>\n</head>"
     return html.replace("</head>", einbau, 1)
 
 
@@ -1189,7 +1189,7 @@ class Api:
         try:
             thema = load_config().get("theme")
             self._menues[ebene] = webview.create_window(
-                "%s %d" % (MENUE_TITEL, ebene), html="<body></body>", js_api=self,
+                f"{MENUE_TITEL} {ebene}", html="<body></body>", js_api=self,
                 width=200, height=200, x=0, y=0,
                 # Ohne eigene Angabe verlangt pywebview mindestens 200 Punkte
                 # Breite - ein schmales Menü bekäme daneben eine leere Fläche.
@@ -1336,7 +1336,7 @@ class Api:
             return False
         sicher = kennung.replace("\\", "").replace("'", "")
         try:
-            self._fenster.run_js("menue_ausfuehren('%s');" % sicher)
+            self._fenster.run_js(f"menue_ausfuehren('{sicher}');")
             return True
         except Exception:
             return False

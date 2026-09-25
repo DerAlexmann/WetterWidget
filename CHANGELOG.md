@@ -2,6 +2,18 @@
 
 Die Nummern folgen dem Muster `Haupt.Neben.Korrektur`.
 
+## Unveröffentlicht
+
+- **Ruff** prüft den Stil: die Regeln stehen in `pyproject.toml`, aufgerufen
+  wird `ruff check .`.
+- **CI** bei jedem Push: derselbe Stilcheck und ein Übersetzungslauf gegen
+  Python 3.10 und 3.12. Tests gibt es keine.
+- Fünf Zeilen von Prozent-Formatierung auf f-Strings umgestellt. Am Verhalten
+  ändert das nichts; geprüft wurden Autostart-Befehl, die Übergabe der
+  Einstellungen an die Seite, der Titel der Menüfenster und der Weg vom Menü
+  zurück in die Oberfläche.
+- Der Text unter *Über* nennt nur noch, was das Widget tut.
+
 ## 1.8.0
 
 - Das Programm sitzt im **Infobereich der Taskleiste** statt in der Taskleiste
@@ -109,8 +121,8 @@ Die Nummern folgen dem Muster `Haupt.Neben.Korrektur`.
 ## 1.1.0
 
 - Position, Größe, Ort, Sprache und Farbschema überdauern das Programmende.
-- Farbpaletten hell und dunkel aus der Bild-Toolbox und dem
-  QR-Code-Generator; Sprachumschaltung Deutsch/Englisch.
+- Farbpaletten hell und dunkel des Hausstils; Sprachumschaltung
+  Deutsch/Englisch.
 - Behoben: fehlte der Windwert in den Daten des Wetterdienstes, stand dort
   `NaN km/h`.
 

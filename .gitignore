@@ -10,6 +10,7 @@ wetter-widget.json
 # Python
 __pycache__/
 *.py[cod]
+.ruff_cache/
 .venv/
 venv/
 
