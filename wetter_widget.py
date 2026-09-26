@@ -45,7 +45,7 @@ if sys.platform == "win32":
 import webview  # noqa: E402  - erst nach dem DPI-Setup importieren
 
 PROGRAMM = "Wetter Widget"
-VERSION = "1.8.1"
+VERSION = "1.8.2"
 CONFIG_NAME = "wetter-widget.json"
 ICON_NAME = "wetter_widget.ico"
 UEBER_TITEL = "Über " + PROGRAMM

@@ -312,6 +312,14 @@ enough: WinForms sets `WS_EX_APPWINDOW` by itself, and that bit overrules the
 tool window. Both styles are set while the window is still hidden - the
 taskbar no longer accepts the change on a visible window.
 
+The current readings and the hourly readings from Bright Sky use **different
+field names**. `/weather` returns `wind_speed`, `wind_direction` and
+`precipitation`. `/current_weather` does not know those fields at all, only the
+versions carrying the period in the name: `wind_speed_10` is the mean over the
+last ten minutes, `precipitation_60` the sum over the last hour, with the
+`_30` fields in between. The helper `aktuell()` tries them in turn, because not
+every station reports every period.
+
 ## Data
 
 Readings and forecast come from the **Deutscher Wetterdienst**, retrieved

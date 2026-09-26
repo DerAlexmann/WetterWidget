@@ -1235,6 +1235,25 @@ function renderMessage(text, isError){
   content.innerHTML = `<div class="msg${isError ? ' error' : ''}">${text}</div>`;
 }
 
+/* Bright Sky nennt die Aktuellwerte mit dem Zeitraum im Namen: wind_speed_10
+   ist das Mittel der letzten zehn Minuten, precipitation_60 die Summe der
+   letzten Stunde. Ein Feld ohne diesen Zusatz gibt es unter current_weather
+   nicht - nur in den Stundenwerten. Gesucht wird darum der Reihe nach, und
+   meldet eine Station den kürzesten Zeitraum nicht, gilt der nächstlängere.
+   Zurück kommt der Wert samt Zeitraum, denn bei Niederschlag gehört er in die
+   Anzeige. Ohne Zeitraum stammt der Wert aus einem Feld ohne Zusatz. */
+function aktuell(w, feld, zeitraeume){
+  for (const minuten of zeitraeume){
+    const wert = w[feld + "_" + minuten];
+    if (wert !== null && wert !== undefined) return { wert: wert, minuten: minuten };
+  }
+  const blank = w[feld];
+  if (blank !== null && blank !== undefined) return { wert: blank, minuten: null };
+  return null;
+}
+
+const ZEITRAUM_KUERZEL = { 10: "/10 min", 30: "/30 min", 60: "/h" };
+
 function windDirection(deg){
   if (deg === null || deg === undefined) return '–';
   const dirs = [_("N"), _("NO"), _("O"), _("SO"), _("S"), _("SW"), _("W"), _("NW")];
@@ -1305,6 +1324,10 @@ function anzeigen(){
     `;
   }).join('');
 
+  const wind = aktuell(w, "wind_speed", [10, 30, 60]);
+  const windRichtung = aktuell(w, "wind_direction", [10, 30, 60]);
+  const regen = aktuell(w, "precipitation", [60, 30, 10]);
+
   content.innerHTML = `
     <div class="station-line">${entfernung !== null
       ? _("Station ca. {entfernung} entfernt", {entfernung: e.entfernung(entfernung)}) : ''}</div>
@@ -1321,12 +1344,15 @@ function anzeigen(){
     <div class="metrics">
       <div class="metric">
         <div class="metric-label">${_("Wind")}</div>
-        <div class="metric-value accent">${w.wind_speed != null
-          ? e.wind(w.wind_speed) + ' ' + windDirection(w.wind_direction) : '–'}</div>
+        <div class="metric-value accent">${wind !== null
+          ? e.wind(wind.wert) + (windRichtung ? ' ' + windDirection(windRichtung.wert) : '')
+          : '–'}</div>
       </div>
       <div class="metric">
         <div class="metric-label">${_("Niederschlag")}</div>
-        <div class="metric-value accent">${e.niederschlag(w.precipitation != null ? w.precipitation : 0)}</div>
+        <div class="metric-value accent">${regen !== null
+          ? e.niederschlag(regen.wert) + (ZEITRAUM_KUERZEL[regen.minuten] || '')
+          : '–'}</div>
       </div>
       <div class="metric">
         <div class="metric-label">${_("Luftdruck")}</div>

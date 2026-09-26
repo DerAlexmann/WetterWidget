@@ -2,6 +2,19 @@
 
 Die Nummern folgen dem Muster `Haupt.Neben.Korrektur`.
 
+## 1.8.2
+
+- **Wind und Niederschlag blieben leer.** Bright Sky nennt die Aktuellwerte
+  mit dem Zeitraum im Namen - `wind_speed_10`, `precipitation_60` -, das
+  Widget fragte nach `wind_speed` und `precipitation`. Diese Felder gibt es
+  nur in den Stundenwerten. Beim Wind stand darum immer ein Strich, beim
+  Niederschlag immer 0,0 mm, und das für jeden Ort. Gesucht wird jetzt der
+  Reihe nach: beim Wind das Mittel der letzten zehn Minuten, beim
+  Niederschlag die Summe der letzten Stunde; meldet eine Station den
+  kürzesten Zeitraum nicht, gilt der nächstlängere.
+- Der Niederschlag trägt den Zeitraum am Wert - `0,4 mm/h`. Fehlt der Wert
+  wirklich, steht dort ein Strich statt einer Null.
+
 ## 1.8.1
 
 - Die Seite gibt es jetzt auch auf Englisch: **README.en.md**.

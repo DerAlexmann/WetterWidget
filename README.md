@@ -321,6 +321,14 @@ dieses Bit sticht das Werkzeugfenster aus. Beide Stile werden gesetzt, solange
 das Fenster noch verborgen ist - an einem sichtbaren Fenster nimmt die
 Taskleiste die Änderung nicht mehr an.
 
+Die Aktuellwerte und die Stundenwerte von Bright Sky tragen **verschiedene
+Feldnamen**. `/weather` liefert `wind_speed`, `wind_direction` und
+`precipitation`. `/current_weather` kennt diese Felder nicht, sondern nur die
+Fassungen mit Zeitraum im Namen: `wind_speed_10` ist das Mittel der letzten
+zehn Minuten, `precipitation_60` die Summe der letzten Stunde, dazwischen
+liegen die `_30`-Felder. Der Helfer `aktuell()` sucht sie der Reihe nach ab,
+denn nicht jede Station meldet jeden Zeitraum.
+
 ## In English
 
 Die vollständige englische Fassung dieser Seite steht in
