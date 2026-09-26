@@ -14,6 +14,8 @@ Farbschema, metrische und imperiale Einheiten.
 Zwei Darstellungen: als **Fenster** oder als einzeilige **Leiste** für den
 oberen oder unteren Bildschirmrand.
 
+*[English version: README.en.md](README.en.md)*
+
 ![Die Leiste, rahmenlos](docs/leiste-rahmenlos.png)
 
 ![Die Leiste mit geöffnetem Kontextmenü](docs/leiste-menue.png)
@@ -231,9 +233,9 @@ Beschriftung im Menü kommt aus der Sprachtabelle.
 
 ## Farbschema
 
-Die Paletten stehen als `THEMES` in `wetter-widget.html` und tragen dieselben
-Rollennamen wie in den anderen Programmen (`BG`, `CARD`, `TEXT`, `ACCENT` …),
-ein eigenes Schema entsteht durch einen weiteren Eintrag mit denselben Namen.
+Die Paletten stehen als `THEMES` in `wetter-widget.html` und tragen die
+Rollennamen des Hausstils (`BG`, `CARD`, `TEXT`, `ACCENT` …); ein eigenes
+Schema entsteht durch einen weiteren Eintrag mit denselben Namen.
 
 ## Dateien
 
@@ -247,6 +249,7 @@ ein eigenes Schema entsteht durch einen weiteren Eintrag mit denselben Namen.
 | `requirements-dev.txt` | Nur zum Prüfen: Ruff |
 | `pyproject.toml` | Eckdaten des Projekts und die Ruff-Einstellungen |
 | `.github/workflows/ci.yml` | Prüft bei jedem Push Stil und Übersetzbarkeit |
+| `README.en.md` | Dieselbe Seite auf Englisch |
 | `docs/` | Bildschirmfotos für diese Seite |
 | `dist\WetterWidget.exe` | Das fertige Programm, entsteht beim Bauen (ca. 15 MB) |
 | `wetter-widget.json` | Gespeicherter Zustand, entsteht neben der .exe beim ersten Lauf |
@@ -318,29 +321,10 @@ dieses Bit sticht das Werkzeugfenster aus. Beide Stile werden gesetzt, solange
 das Fenster noch verborgen ist - an einem sichtbaren Fenster nimmt die
 Taskleiste die Änderung nicht mehr an.
 
-## English summary
+## In English
 
-A weather widget for the Windows desktop, showing current readings and the
-next few hours for a place in **Germany** - the data comes from Germany's
-national weather service (DWD) and covers that country only. The interface is
-an HTML page rendered in a native window through Microsoft WebView2, so no
-external browser is started and nothing needs to be installed.
-
-The interface speaks German and English (it follows the Windows language
-unless told otherwise) and offers metric or imperial units, independently of
-the language. Everything else lives in the context menu - right-click the
-widget: refresh interval, always on top, frameless, locked in place,
-transparency, dark or light scheme, start with Windows, and about.
-
-The program lives in the **notification area** next to the clock rather than
-on the taskbar, as a widget tends to stay open all day. Its icon shows the
-current reading as a tooltip; a left click brings the widget back, a right
-click offers *Show widget* / *Hide widget* and *Quit*. The window's close
-button only hides the widget.
-
-Grab `WetterWidget.exe` from the [releases](../../releases) page, put it
-somewhere permanent and double-click it. Settings are stored in
-`wetter-widget.json` next to the executable.
+Die vollständige englische Fassung dieser Seite steht in
+**[README.en.md](README.en.md)**.
 
 ## Lizenz und Copyright
 

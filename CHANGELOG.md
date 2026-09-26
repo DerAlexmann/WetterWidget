@@ -2,8 +2,9 @@
 
 Die Nummern folgen dem Muster `Haupt.Neben.Korrektur`.
 
-## Unveröffentlicht
+## 1.8.1
 
+- Die Seite gibt es jetzt auch auf Englisch: **README.en.md**.
 - **Ruff** prüft den Stil: die Regeln stehen in `pyproject.toml`, aufgerufen
   wird `ruff check .`.
 - **CI** bei jedem Push: derselbe Stilcheck und ein Übersetzungslauf gegen

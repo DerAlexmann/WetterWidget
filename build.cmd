@@ -11,11 +11,15 @@ REM Python finden: bevorzugt ueber den Windows-Starter py, sonst python
 set "PY=py -3"
 py -3 --version >nul 2>nul || set "PY=python"
 
+REM --exclude-module cryptography: PyInstaller packt das Paket mit ein,
+REM sobald es in der Python-Installation liegt - das Widget benutzt es nicht
+REM und die .exe waere um vier Megabyte groesser.
 %PY% -m PyInstaller --noconfirm --onefile --windowed --clean ^
   --name "WetterWidget" ^
   --icon "wetter_widget.ico" ^
   --add-data "wetter-widget.html;." ^
   --add-data "wetter_widget.ico;." ^
+  --exclude-module cryptography ^
   wetter_widget.py
 
 if errorlevel 1 (
