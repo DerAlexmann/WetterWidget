@@ -1,6 +1,6 @@
 [project]
 name = "wetter-widget"
-version = "1.8.2"
+version = "1.8.3"
 description = "Wetter-Widget für den Windows-Desktop mit Messwerten und Vorhersage des DWD"
 readme = "README.md"
 # Das Programm selbst käme mit weniger aus; geprüft wird gegen 3.10 und 3.12.

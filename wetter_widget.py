@@ -45,7 +45,7 @@ if sys.platform == "win32":
 import webview  # noqa: E402  - erst nach dem DPI-Setup importieren
 
 PROGRAMM = "Wetter Widget"
-VERSION = "1.8.2"
+VERSION = "1.8.3"
 CONFIG_NAME = "wetter-widget.json"
 ICON_NAME = "wetter_widget.ico"
 UEBER_TITEL = "Über " + PROGRAMM
@@ -257,7 +257,11 @@ def seite_bauen(einstellungen: dict) -> str:
         startwerte["intervall"] = einstellungen["intervall"]
     startwerte["autostart"] = autostart_lesen()
     startwerte["version"] = VERSION
-    daten = json.dumps(startwerte, ensure_ascii=False)
+    # Jedes "</" wird entschärft, bevor die Werte in ein Skript-Element
+    # geraten: stünde in einem von ihnen "</script>", endete dort das Element,
+    # und was dahinter steht, wäre Markup, das der Browser aufbaut. Die Seite
+    # liest den maskierten Schrägstrich wieder als gewöhnlichen Schrägstrich.
+    daten = json.dumps(startwerte, ensure_ascii=False).replace("</", "<\\/")
     einbau = f"<script>window.WIDGET_CONFIG = {daten};</script>\n</head>"
     return html.replace("</head>", einbau, 1)
 
@@ -1334,9 +1338,11 @@ class Api:
         self.menue_schliessen()
         if not isinstance(kennung, str) or len(kennung) > 60:
             return False
-        sicher = kennung.replace("\\", "").replace("'", "")
+        # json.dumps liefert eine vollständige JavaScript-Zeichenkette, mit
+        # Anführungszeichen und allem Nötigen maskiert. Einzelne Zeichen
+        # herauszufiltern hieße, sich auf eine Liste zu verlassen.
         try:
-            self._fenster.run_js(f"menue_ausfuehren('{sicher}');")
+            self._fenster.run_js(f"menue_ausfuehren({json.dumps(kennung)});")
             return True
         except Exception:
             return False

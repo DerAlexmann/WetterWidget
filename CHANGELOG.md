@@ -2,6 +2,29 @@
 
 Die Nummern folgen dem Muster `Haupt.Neben.Korrektur`.
 
+## 1.8.3
+
+Eine Sicherheitsdurchsicht des ganzen Programms; am Verhalten ändert sich
+nichts.
+
+- **Angaben der Wetterdienste werden maskiert.** Ortsname und Wetterlage kamen
+  unmaskiert in die Seite. Hätte einer der beiden Dienste einen Namen mit
+  spitzen Klammern geliefert, wäre daraus ein Element geworden, das der
+  Browser aufbaut und ausführt - mitsamt Zugriff auf die Schnittstelle des
+  Programms. Beides geht jetzt durch `maskieren()`, und Meldungen setzt die
+  Seite über `textContent`.
+- **Der gespeicherte Ort kann das eingebaute Skript nicht mehr beenden.** Die
+  Startwerte stehen in einem Skript-Element der Seite; ein `</script>` im
+  Ortsnamen hätte es dort geschlossen und den Rest zu Markup gemacht. Jedes
+  `</` wird nun entschärft - derselbe Griff, den die Seite beim Einbau der
+  Menüdaten längst tut.
+- **Die gespeicherte Sprache wird geprüft**, wie Farbschema, Einheiten und
+  Darstellung auch. Der Wert steht in der Adresse der Ortssuche und im
+  `lang`-Attribut der Über-Seite; eine von Hand eingetragene Sprache wird jetzt
+  verworfen statt übernommen.
+- Die Wahl aus dem Menü reicht das Programm über `json.dumps` an die Seite
+  weiter, statt einzelne Zeichen herauszufiltern.
+
 ## 1.8.2
 
 - **Wind und Niederschlag blieben leer.** Bright Sky nennt die Aktuellwerte

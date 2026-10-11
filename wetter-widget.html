@@ -1231,8 +1231,25 @@ function oberflaeche_beschriften(){
   searchBtn.textContent = _("Suchen");
 }
 
+/* Setzt eine fremde Angabe als Text ein und nicht als Markup. Gebraucht wird
+   das überall, wo Namen und Beschreibungen der Wetterdienste in die Seite
+   kommen: ein Ortsname mit spitzen Klammern wäre sonst ein Element, das der
+   Browser aufbaut und ausführt. */
+function maskieren(text){
+  return (text === null || text === undefined ? "" : String(text))
+    .split("&").join("&amp;")
+    .split("<").join("&lt;")
+    .split(">").join("&gt;")
+    .split('"').join("&quot;")
+    .split("'").join("&#39;");
+}
+
 function renderMessage(text, isError){
-  content.innerHTML = `<div class="msg${isError ? ' error' : ''}">${text}</div>`;
+  const tafel = document.createElement('div');
+  tafel.className = isError ? 'msg error' : 'msg';
+  tafel.textContent = text;
+  content.innerHTML = '';
+  content.appendChild(tafel);
 }
 
 /* Bright Sky nennt die Aktuellwerte mit dem Zeitraum im Namen: wind_speed_10
@@ -1278,7 +1295,7 @@ async function geocode(name){
   const schluessel = SPRACHE + "|" + name.toLowerCase();
   if (ORTSSPEICHER[schluessel]) return ORTSSPEICHER[schluessel];
 
-  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=${SPRACHE}&country=DE`;
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=${encodeURIComponent(SPRACHE)}&country=DE`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(_("Ortssuche nicht erreichbar"));
   const data = await res.json();
@@ -1331,12 +1348,12 @@ function anzeigen(){
   content.innerHTML = `
     <div class="station-line">${entfernung !== null
       ? _("Station ca. {entfernung} entfernt", {entfernung: e.entfernung(entfernung)}) : ''}</div>
-    <div class="city-name">${loc.name}</div>
+    <div class="city-name">${maskieren(loc.name)}</div>
 
     <div class="main-readout">
       <div class="temp">${e.temperatur(w.temperature)}<sup>${e.temperatur_zeichen}</sup></div>
       <div class="condition-col">
-        <div class="condition-text">${conditionText}</div>
+        <div class="condition-text">${maskieren(conditionText)}</div>
         <div class="updated">${_("Stand {zeit} Uhr", {zeit: formatTime(w.timestamp)})}</div>
       </div>
     </div>
@@ -1412,7 +1429,12 @@ cityInput.addEventListener('keydown', (e) => {
 });
 
 function starten(){
-  SPRACHE = GESPEICHERT.sprache || sprache_erkennen();
+  // Nur eine Sprache, die es wirklich gibt - wie bei Farbschema, Einheiten
+  // und Darstellung. Der Wert steht später in der Adresse der Ortssuche und
+  // im lang-Attribut der Über-Seite.
+  SPRACHE = (GESPEICHERT.sprache === SOURCE_LANGUAGE
+             || TRANSLATIONS[GESPEICHERT.sprache])
+    ? GESPEICHERT.sprache : sprache_erkennen();
   // Rahmen, Vordergrund und Transparenz hat das Programm beim Öffnen des
   // Fensters bereits gesetzt - hier wird der Stand nur übernommen.
   VORDERGRUND = !!GESPEICHERT.vordergrund;
