@@ -1,0 +1,80 @@
+Wetter Widget
+Copyright (c) 2026 Alexander Unverhau
+Created with assistance of Claude AI (Anthropic)
+
+Licensed under the MIT License. The full license text is in the file LICENSE
+next to this one; this file adds no conditions of its own.
+
+
+Hinweis zur Entstehung
+----------------------
+
+Das Wetter Widget ist in Zusammenarbeit mit Claude AI (Anthropic) entstanden.
+Dieser Hinweis steht der Transparenz halber überall dort, wo auch der
+Copyright-Vermerk steht: im Kopf von wetter_widget.py und wetter-widget.html,
+unter "Über" im Programm, in den Dateieigenschaften der EXE, in dieser Datei
+sowie in README.md und README.en.md.
+
+An den Bedingungen der MIT-Lizenz ändert er nichts. Das Urheberrecht liegt bei
+Alexander Unverhau.
+
+
+Note on authorship
+------------------
+
+Wetter Widget was created with assistance of Claude AI (Anthropic). For
+transparency, this note appears everywhere the copyright notice does: in the
+headers of wetter_widget.py and wetter-widget.html, under "About" in the
+application, in the executable's file properties, in this file, and in
+README.md and README.en.md.
+
+It does not change the terms of the MIT License in any way. The copyright
+remains with Alexander Unverhau.
+
+
+Datenquellen / Data sources
+---------------------------
+
+Messwerte und Vorhersage - Deutscher Wetterdienst (DWD), abgerufen über
+    Bright Sky. Die Daten des DWD stehen unter der Datenlizenz Deutschland -
+    Namensnennung - Version 2.0.
+    https://brightsky.dev/
+
+Ortssuche - Open-Meteo Geocoding, auf Grundlage der Daten von GeoNames
+    (CC BY 4.0).
+    https://open-meteo.com/
+
+Measurements and forecast - Deutscher Wetterdienst (DWD), retrieved through
+    Bright Sky; DWD data under Data licence Germany - attribution - version
+    2.0. Place search - Open-Meteo Geocoding, based on GeoNames data
+    (CC BY 4.0).
+
+
+Verwendete Bibliotheken / Third-party components
+------------------------------------------------
+
+pywebview - BSD 3-Clause License
+    Zeigt die Oberfläche im nativen Fenster.
+    https://pywebview.flowrl.com/
+
+pythonnet und clr_loader - MIT License
+    Verbinden Python mit .NET und damit mit WebView2.
+    https://pythonnet.github.io/
+
+Microsoft WebView2 SDK - Microsoft Software License Terms
+    Spricht die WebView2-Laufzeit von Windows an. Die Laufzeit selbst gehört
+    zum Betriebssystem und steckt nicht in diesem Programm.
+    https://developer.microsoft.com/microsoft-edge/webview2/
+
+In der gebündelten EXE sind diese Bibliotheken enthalten. Ihre jeweiligen
+Lizenzbedingungen gelten unverändert fort; die hier genannten Namen und
+Fundstellen dienen der Nachvollziehbarkeit.
+
+Die EXE bringt darüber hinaus die Python-Laufzeit mit. Alle Bestandteile und
+ihre Lizenzen stehen vollständig in DRITTANBIETER-LIZENZEN.md; die
+vollständigen Lizenztexte liegen jedem Release als
+WetterWidget-lizenztexte.zip bei.
+
+The executable also bundles the Python runtime. All components and their
+licenses are listed in DRITTANBIETER-LIZENZEN.md; the full license texts are
+attached to every release as WetterWidget-lizenztexte.zip.

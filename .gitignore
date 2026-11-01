@@ -7,10 +7,21 @@ dist/
 # Zustand des laufenden Widgets, entsteht neben der .exe
 wetter-widget.json
 
+# Abgeleitet, entsteht beim Bauen aus VERSION in wetter_widget.py
+versionsinfo.txt
+
+# Beim Bauen eingesammelt: die Lizenztexte der mitgelieferten Pakete
+lizenztexte/
+
+# Ergebnis von "wetter_widget.py --selbsttest"
+selbsttest.html
+selbsttest.html.fehler.txt
+
 # Python
 __pycache__/
 *.py[cod]
 .ruff_cache/
+.pytest_cache/
 .venv/
 venv/
 

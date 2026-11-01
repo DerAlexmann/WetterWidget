@@ -45,7 +45,7 @@ if sys.platform == "win32":
 import webview  # noqa: E402  - erst nach dem DPI-Setup importieren
 
 PROGRAMM = "Wetter Widget"
-VERSION = "1.8.3"
+VERSION = "1.9.0"
 CONFIG_NAME = "wetter-widget.json"
 ICON_NAME = "wetter_widget.ico"
 UEBER_TITEL = "Über " + PROGRAMM
@@ -1429,6 +1429,56 @@ class Api:
 # Start
 # --------------------------------------------------------------------------
 
+def selbsttest(ziel: str) -> int:
+    """Baut die Seite und schreibt sie in eine Datei, ohne ein Fenster zu öffnen.
+
+    Gedacht für den Release-Workflow. Dass eine --windowed-EXE nach zwanzig
+    Sekunden noch läuft, beweist wenig: Bei einem Fehler im Start zeigt sie
+    einen Meldungsdialog und bleibt dabei stehen - ein Rauchtest nach dem
+    Muster "lebt noch" wäre dafür grün. Dieser Weg verlangt ein Ergebnis. Die
+    Datei entsteht nur, wenn webview geladen ist, die eingebettete HTML-Datei
+    gefunden wird und die Startwerte in die Seite passen.
+
+    Die Einstellungen werden dabei nur gelesen, und eine unbrauchbare
+    Einstellungsdatei fällt hier nicht auf - load_config() verwirft sie und
+    liefert die Vorgaben, so wie beim gewöhnlichen Start auch.
+
+    Rückgabe: 0 gelungen, 1 gescheitert (der Grund steht in
+    <ziel>.fehler.txt), 2 gescheitert und der Grund ließ sich nicht schreiben.
+    """
+    grunddatei = ziel + ".fehler.txt"
+    try:
+        # Ein Grund von einem früheren Lauf soll nicht neben einem gelungenen
+        # Ergebnis liegen bleiben und den nächsten Blick in die Irre führen.
+        os.remove(grunddatei)
+    except OSError:
+        pass
+
+    try:
+        seite = seite_bauen(load_config())
+        with open(ziel, "w", encoding="utf-8") as datei:
+            datei.write(seite)
+    except Exception:
+        # Hier wird bewusst alles gefangen und nichts weitergeworfen: Eine
+        # --windowed-EXE zeigt bei einer unbehandelten Ausnahme einen Dialog
+        # und wartet, bis ihn jemand wegklickt - im Workflow hinge der Schritt
+        # dann, bis die Zeit abläuft. Der Grund landet in einer Datei neben
+        # dem Ziel, der Rückgabewert meldet das Scheitern.
+        import traceback
+        try:
+            with open(grunddatei, "w", encoding="utf-8") as datei:
+                datei.write(traceback.format_exc())
+        except Exception:
+            # Der Fehler, der hierher führt, ist oft selbst ein OSError - ein
+            # nicht beschreibbares Ziel etwa. Dann scheitert auch das
+            # Schreiben des Grundes, und ein stilles "pass" ließe jemanden
+            # nach einer Datei suchen, die es nicht gibt. Ein eigener
+            # Rückgabewert sagt es stattdessen.
+            return 2
+        return 1
+    return 0
+
+
 def main():
     einstellungen = load_config()
     thema = einstellungen.get("theme")
@@ -1532,4 +1582,8 @@ def main():
 
 
 if __name__ == "__main__":
+    # --selbsttest <Datei> baut die Seite und endet; alles andere startet das
+    # Widget. Eine Kommandozeile hat das Programm sonst nicht.
+    if len(sys.argv) > 1 and sys.argv[1] == "--selbsttest":
+        sys.exit(selbsttest(sys.argv[2] if len(sys.argv) > 2 else "selbsttest.html"))
     main()

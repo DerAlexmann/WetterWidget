@@ -1,2 +1,6 @@
 # Zum Entwickeln und Prüfen. Für den Betrieb wird nichts davon gebraucht.
 ruff>=0.6
+
+# Für die Wächter über die Auslieferung in tests/. Sie lesen nur Dateien;
+# pywebview wird dafür nicht gebraucht.
+pytest>=8.0

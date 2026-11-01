@@ -2,6 +2,43 @@
 
 Die Nummern folgen dem Muster `Haupt.Neben.Korrektur`.
 
+## 1.9.0
+
+Diese Fassung ändert nichts an der Anzeige. Sie richtet die Auslieferung her:
+Die EXE sagt jetzt, was sie ist, und was in ihr steckt, ist belegt statt
+angenommen.
+
+- **Die EXE trägt Versionsangaben.** In den Dateieigenschaften standen
+  Produktname, Fassung und Urheber bisher leer - wer die Datei heruntergeladen
+  hatte, konnte nicht nachsehen, welche Fassung vor ihm liegt. Die Angaben
+  entstehen beim Bauen aus `VERSION` in `wetter_widget.py`, derselben Stelle,
+  aus der auch die Seite unter *Über* liest.
+- **Lizenzen der mitgelieferten Teile:** `DRITTANBIETER-LIZENZEN.md`
+  (zweisprachig) nennt jeden Bestandteil der EXE mit Lizenz und geprüftem
+  Verweis - von der Python-Laufzeit über pywebview und pythonnet bis zu den
+  WebView2-Teilen von Microsoft. Die Datei liegt dem Release bei, die
+  vollständigen Lizenztexte als `WetterWidget-lizenztexte.zip`, und `LICENSE`
+  und `NOTICE` liegen neben der EXE statt nur im Repository. Es bleibt dabei:
+  Das Gesamtwerk ist MIT, kein Bestandteil verlangt etwas anderes.
+- **Die Prüfsumme kommt vom Bau**, nicht mehr von Hand: `SHA256SUMS.txt`
+  hängt am Release und lässt sich mit `sha256sum -c` prüfen.
+- **Gebaut wird jetzt in der CI.** Ein Release-Workflow baut die EXE bei einem
+  Versions-Tag aus den festen Fassungen in `requirements-build.txt`, sieht
+  sich die fertige Datei an und legt erst dann einen Entwurf an. Die
+  Untergrenzen in `requirements.txt` bleiben, wie sie sind - sie gelten für
+  alle, die `wetter_widget.py` selbst laufen lassen.
+- Neuer Schalter `--selbsttest <Datei>`: baut die Seite, schreibt sie in die
+  genannte Datei und endet, ohne ein Fenster zu öffnen. Damit belegt der Bau,
+  dass die gepackte EXE wirklich hochkommt - dass ein Fenster stehen bleibt,
+  beweist das nicht.
+- `SECURITY.md` nennt den Meldeweg und sagt, womit das Programm umgeht.
+  `NOTICE` führt Datenquellen und Bibliotheken an einer Stelle zusammen.
+- Dependabot sieht monatlich nach neuen Fassungen - und lässt die Untergrenzen
+  dabei in Ruhe.
+- Nicht festgenagelt und auch nicht festnagelbar: die mitgezogenen Pakete und
+  das Laufzeitabbild von Python. Das sind keine Hash-Pins; Bit für Bit
+  reproduzierbar ist der Bau also nicht.
+
 ## 1.8.3
 
 Eine Sicherheitsdurchsicht des ganzen Programms; am Verhalten ändert sich
