@@ -1,5 +1,11 @@
 name: CI
 
+# Bei einem Pull Request aus einer Abspaltung läuft hier fremder Code: pytest
+# und ruff kommen aus dem Zweig des Antragstellers, nicht aus diesem
+# Repository. Das ist bei `pull_request` vorgesehen und darum ungefährlich -
+# der Auslöser gibt kein Geheimnis heraus und nur ein lesendes Token. Die
+# Vorkehrungen unten halten die Folgen eines solchen Laufs klein.
+
 on:
   push:
     branches: [main]
@@ -10,12 +16,30 @@ on:
 permissions:
   contents: read
 
+# Ein Zweig braucht nur einen Lauf. Wer schnell hinterherschiebt - oder es
+# absichtlich tut -, belegt sonst die Läufer mehrfach, und die früheren
+# Ergebnisse sieht ohnehin niemand mehr an. Beim Zug auf main wird nicht
+# abgebrochen: Dort soll jeder Commit seinen eigenen Befund behalten.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   stil:
     name: Stil (ruff)
     runs-on: ubuntu-latest
+    # Keiner dieser Jobs braucht mehr als ein paar Minuten. Ohne eigene
+    # Angabe gilt die Vorgabe von GitHub: sechs Stunden - so lange könnte ein
+    # hängender oder absichtlich kreisender Lauf einen Läufer besetzen.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Sonst bleibt das Token in .git/config liegen, und jeder Befehl im
+          # Job kann es lesen - auch der fremde Code aus einem Pull Request.
+          # Hier schiebt niemand etwas zurück; gelesen wird aus einem
+          # öffentlichen Repository, dafür braucht es keine Anmeldung.
+          persist-credentials: false
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -25,12 +49,15 @@ jobs:
   uebersetzen:
     name: Übersetzen (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
         python: ["3.10", "3.12"]
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
@@ -45,8 +72,11 @@ jobs:
   auslieferung:
     name: Auslieferung (Wächter)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
