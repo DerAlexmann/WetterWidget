@@ -26,8 +26,15 @@ jobs:
   quellpaket:
     name: Quellpaket (ZIP)
     runs-on: ubuntu-latest
+    # Ohne eigene Angabe gilt die Vorgabe von GitHub: sechs Stunden.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Sonst bleibt das Token in .git/config liegen und jeder Befehl im
+          # Job kann es lesen - auch die Pakete, die gleich installiert
+          # werden. Zurueckgeschoben wird hier nichts.
+          persist-credentials: false
 
       - name: ZIP packen
         run: |
@@ -59,8 +66,13 @@ jobs:
   windows-exe:
     name: Windows-EXE
     runs-on: windows-latest
+    # Der Bau dauert wenige Minuten; die Vorgabe von GitHub waeren sechs
+    # Stunden. Der Rauchtest der EXE hat zusaetzlich sein eigenes Limit.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v7
         with:
@@ -288,6 +300,7 @@ jobs:
     # per workflow_dispatch soll bauen und pruefen duerfen, ohne an diesem
     # Schritt rot zu werden. Die Bau-Jobs bleiben deshalb ohne Bedingung.
     if: github.ref_type == 'tag'
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:

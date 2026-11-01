@@ -1092,10 +1092,81 @@ def test_bauversionen_erfuellen_die_untergrenzen():
 
 
 def test_ci_prueft_die_waechter():
-    """Ein Test, den niemand aufruft, ist kein Test."""
-    text = CI_YML.read_text(encoding="utf-8")
-    assert "pytest" in text
-    assert "requirements-dev.txt" in text
+    """Ein Test, den niemand aufruft, ist kein Test.
+
+    Gelesen wird ohne Kommentare und verlangt wird der ganze Aufruf: Im Kopf
+    von ci.yml steht das Wort "pytest" in einer Erklärung, und ein Test auf
+    das bloße Wort blieb grün, nachdem die Zeile gelöscht war, die es
+    wirklich laufen lässt.
+    """
+    text = ohne_kommentare(CI_YML.read_text(encoding="utf-8"))
+    assert "python -m pytest tests" in text, "In der CI läuft pytest nicht."
+    assert "pip install -r requirements-dev.txt" in text, (
+        "Ohne die Pakete gäbe es kein pytest zum Laufen."
+    )
+
+
+@pytest.mark.parametrize("datei", WORKFLOWS)
+def test_jeder_job_hat_ein_zeitlimit(datei):
+    """Ohne eigene Angabe gilt die Vorgabe von GitHub: sechs Stunden.
+
+    Bei einem Pull Request aus einer Abspaltung läuft in `ci.yml` fremder Code
+    (ruff und pytest kommen aus dem Zweig des Antragstellers). Ein hängender
+    oder absichtlich kreisender Lauf besetzte einen Läufer einen halben Tag.
+
+    Verlangt wird die Angabe auf der Höhe des Jobs - vier Leerzeichen. Ein
+    Zeitlimit an einem einzelnen Schritt deckt den Job nicht, und über den
+    ganzen Block gesucht sähe beides gleich aus.
+    """
+    jobs = jobs_zerlegen((WORKFLOW_ORDNER / datei).read_text(encoding="utf-8"))
+    assert jobs, f"{datei} hat keine Jobs."
+    for name, block in jobs.items():
+        treffer = re.search(r"^    timeout-minutes:\s*(\d+)", block, re.MULTILINE)
+        assert treffer, f"Der Job {name} in {datei} hat kein Zeitlimit."
+        assert int(treffer.group(1)) <= 60, (
+            f"Das Zeitlimit von {name} in {datei} ist so hoch, dass es nichts abfängt."
+        )
+
+
+@pytest.mark.parametrize("datei", WORKFLOWS)
+def test_das_token_bleibt_nicht_im_arbeitsordner(datei):
+    """`actions/checkout` legt das Token sonst in .git/config ab.
+
+    Jeder Befehl im Job kann es dort lesen - auch fremder Code aus einem Pull
+    Request und jedes Paket, das gleich installiert wird. Geschoben wird in
+    keinem dieser Jobs; gelesen wird aus einem öffentlichen Repository, dafür
+    braucht es keine Anmeldung.
+
+    Gezählt wird gegeneinander: Kommt ein vierter Checkout hinzu und bekommt
+    die Zeile nicht, fällt das auf.
+    """
+    text = ohne_kommentare((WORKFLOW_ORDNER / datei).read_text(encoding="utf-8"))
+    checkouts = len(re.findall(r"uses:\s*actions/checkout@", text))
+    if not checkouts:
+        pytest.skip(f"{datei} holt den Quelltext nicht")
+    assert text.count("persist-credentials: false") == checkouts, (
+        f"{datei} hat {checkouts} Checkouts, aber "
+        f"{text.count('persist-credentials: false')}-mal persist-credentials: false."
+    )
+
+
+def test_ci_laesst_einen_zweig_nur_einmal_laufen():
+    """Sonst belegen mehrere Läufe desselben Zweigs die Läufer gleichzeitig.
+
+    Auf main wird nicht abgebrochen - dort soll jeder Commit seinen eigenen
+    Befund behalten. Verlangt wird deshalb beides: die Gruppe und dass das
+    Abbrechen an den Pull Request gebunden ist.
+    """
+    text = ohne_kommentare(CI_YML.read_text(encoding="utf-8"))
+    assert re.search(r"^concurrency:", text, re.MULTILINE), (
+        "ci.yml fasst die Läufe eines Zweigs nicht zusammen."
+    )
+    assert "github.ref" in text.split("concurrency:", 1)[1][:200], (
+        "Die Gruppe unterscheidet die Zweige nicht."
+    )
+    assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in text, (
+        "Entweder wird gar nicht abgebrochen oder auch auf main."
+    )
 
 
 def test_dependabot_laesst_die_untergrenzen_in_ruhe():
