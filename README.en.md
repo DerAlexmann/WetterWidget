@@ -52,10 +52,19 @@ everything is in that single file.
 > hold on to a freshly downloaded, unknown file for a few seconds while it
 > checks it; an attempt to start it during that time can fail with "Access
 > denied". Just wait a moment and start it again. If you want to be sure,
-> compare the SHA-256 checksum from the release notes first.
+> compare the SHA-256 checksum from `SHA256SUMS.txt` on the release first:
+> `sha256sum -c SHA256SUMS.txt` or
+> `Get-FileHash WetterWidget.exe -Algorithm SHA256`.
+
+Besides the executable, every release carries the checksum file, this
+program's MIT license (`LICENSE`, `NOTICE`), the licenses of the bundled
+components (**[DRITTANBIETER-LIZENZEN.md](DRITTANBIETER-LIZENZEN.md)**), their
+full license texts as `WetterWidget-lizenztexte.zip`, and a source package. The
+executable's file properties state version, author and license.
 
 If you would rather not take that on trust, `build.cmd` builds the executable
-in one go - the complete source is right here.
+in one go - the complete source is right here. The published one is built by
+the release workflow, from the exact versions in `requirements-build.txt`.
 
 Running from source instead:
 
@@ -334,5 +343,17 @@ Germany – Attribution 2.0.
     Copyright 2026 Alexander Unverhau
     Created with assistance of Claude AI
 
-The same notice is at the top of both source files and in the *About* entry,
-together with the short form of the MIT licence and the data sources.
+The same notice is at the top of both source files, in the executable's file
+properties, in **[NOTICE](NOTICE)** and in the *About* entry, together with
+the short form of the MIT licence and the data sources.
+
+The bundled executable brings third-party components along - the Python
+runtime, pywebview, pythonnet and Microsoft's WebView2 parts. Each of them is
+listed with its license and source in
+**[DRITTANBIETER-LIZENZEN.md](DRITTANBIETER-LIZENZEN.md)**; the full license
+texts are attached to every release as `WetterWidget-lizenztexte.zip`. None of
+them changes the MIT status of the work as a whole - the reasoning is in that
+file.
+
+How to report a security issue, and what the program handles, is in
+**[SECURITY.md](SECURITY.md)**.

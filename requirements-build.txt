@@ -1,0 +1,29 @@
+# Abhaengigkeiten fuer den Bau der Windows-EXE / dependencies for building the EXE
+#
+# Hier stehen genaue Versionen und keine Untergrenzen wie in requirements.txt:
+# Derselbe Tag soll zweimal dieselbe EXE ergeben, und eine fehlerhafte neue
+# Fassung von PyInstaller oder pywebview soll keinen Release kippen. Dependabot
+# hebt diese Zeilen an - dann wird die neue Fassung einmal bewusst geprueft,
+# statt unbemerkt in ein Release zu rutschen.
+#
+# requirements.txt behaelt seine Untergrenzen: Sie gelten fuer alle, die
+# wetter_widget.py selbst laufen lassen.
+#
+# pythonnet steht hier, obwohl pywebview es selbst mitzieht: Es ist die
+# Bruecke zu WebView2 und entscheidet mit darueber, was in der EXE landet.
+# Nicht festgenagelt und auch nicht festnagelbar sind die uebrigen
+# mitgezogenen Pakete (clr_loader, cffi, pycparser, bottle, proxy_tools,
+# typing_extensions, setuptools und das Gespann hinter PyInstaller) sowie das
+# Laufzeitabbild des Python-Interpreters. Das sind keine Hash-Pins
+# (--require-hashes); Bit fuer Bit reproduzierbar ist der Bau damit nicht -
+# zwei Laeufe vom selben Commit koennen verschiedene Pruefsummen ergeben.
+#
+# Exact versions on purpose: the same tag must produce the same executable.
+# requirements.txt keeps its lower bounds for people running the script
+# themselves. These are not hash pins, so the build is not bit-for-bit
+# reproducible.
+
+pyinstaller==6.22.2
+
+pywebview==6.2.1
+pythonnet==3.1.0

@@ -1,0 +1,320 @@
+name: Release
+
+# Baut bei einem Versions-Tag (z. B. v1.9.0) die Windows-EXE und ein
+# plattformunabhaengiges Quellpaket und haengt beides an einen GitHub-Release.
+#
+# Die EXE entsteht im --onefile-Modus. Damit die Einstellungen einen Neustart
+# ueberleben, erkennt programm_ordner() in wetter_widget.py den gepackten
+# Zustand (sys.frozen) und legt wetter-widget.json neben der EXE ab statt in
+# dem temporaeren Entpackordner, den PyInstaller bei jedem Start anlegt und
+# beim Beenden wieder loescht.
+#
+# Der Lauf ist auch ohne Tag brauchbar: Ueber workflow_dispatch bauen und
+# pruefen beide Bau-Jobs durch, nur der veroeffentlichende Job bleibt aus.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# Lesen reicht fuer die Bau-Jobs: Sie installieren Pakete und packen eine EXE.
+# Schreiben darf allein der Job, der den Release anlegt.
+permissions:
+  contents: read
+
+jobs:
+  quellpaket:
+    name: Quellpaket (ZIP)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: ZIP packen
+        run: |
+          mkdir -p out/WetterWidget
+          # Die Hilfsskripte und requirements-build.txt liegen mit im Paket:
+          # DRITTANBIETER-LIZENZEN.md verweist auf buendel_pruefen.py und
+          # lizenztexte_sammeln.py, und wer die EXE selbst bauen will, braucht
+          # die festen Fassungen. Ein Verweis auf eine Datei, die nicht
+          # mitkommt, ist kein Verweis.
+          cp wetter_widget.py wetter-widget.html wetter_widget.ico \
+             README.md README.en.md CHANGELOG.md SECURITY.md \
+             LICENSE NOTICE DRITTANBIETER-LIZENZEN.md \
+             requirements.txt requirements-build.txt build.cmd \
+             versionsinfo_erzeugen.py buendel_pruefen.py \
+             lizenztexte_sammeln.py out/WetterWidget/
+          # Schraegstriche im Ref-Namen werden ersetzt: Bei einem Probelauf von
+          # einem Branch wie dependabot/pip/... zeigte der Pfad sonst in einen
+          # Ordner, den es nicht gibt. Tags wie v1.9.0 bleiben, wie sie sind.
+          cd out && zip -r "WetterWidget-${GITHUB_REF_NAME//\//-}-quellen.zip" WetterWidget
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: quellpaket
+          # Vorgabe waere "warn": Der Release entstuende dann stillschweigend
+          # ohne Quellpaket, und rot wird dabei nichts.
+          if-no-files-found: error
+          path: out/*.zip
+
+  windows-exe:
+    name: Windows-EXE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          # Dieselbe Reihe, mit der 1.8.3 gebaut wurde. Die Programmdatei
+          # selbst laeuft ab 3.10 - das prueft ci.yml gegen 3.10 und 3.12.
+          python-version: "3.14"
+
+      - name: Abhaengigkeiten installieren
+        # Genaue Versionen aus requirements-build.txt: Derselbe Tag soll
+        # zweimal dieselbe EXE ergeben. Die Untergrenzen in requirements.txt
+        # gelten weiter fuer alle, die wetter_widget.py selbst laufen lassen.
+        #
+        # Nach jedem Aufruf der Rueckgabewert: Bei einem mehrzeiligen run:
+        # unter PowerShell schlaegt nur der letzte Befehl auf den Exitcode des
+        # Schritts durch. Ohne diese Zeilen waere ein gescheitertes
+        # "pip install -r requirements-build.txt" gruen, und gebaut wuerde mit
+        # den Paketen, die gerade zufaellig da sind.
+        run: |
+          python -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw "pip liess sich nicht aktualisieren." }
+          pip install -r requirements-build.txt -r requirements-dev.txt
+          if ($LASTEXITCODE -ne 0) { throw "Die Abhaengigkeiten fehlen." }
+
+      - name: Waechter der Auslieferung
+        # Dieselben Tests wie in ci.yml - hier aber in der Bauumgebung, in der
+        # die Pakete fuer die Lizenztexte wirklich installiert sind.
+        # AUSLIEFERUNG_PFLICHT macht aus einem Uebersprungen ein Rot:
+        # Uebersprungen ist nicht gruen, und gerade hier zaehlen diese Tests.
+        #
+        # -rs: Jedes Uebersprungen steht mit seinem Grund im Protokoll. Mit -q
+        # allein waere es ein "s" in einer Punktreihe.
+        env:
+          AUSLIEFERUNG_PFLICHT: "1"
+        run: python -m pytest tests -q -rs
+
+      - name: Versionsangaben erzeugen
+        # Ohne --version-file bleiben Produktname, Version und Urheber in den
+        # Dateieigenschaften leer - PyInstaller legt von sich aus keine
+        # Versionsressource an. Bei allen Fassungen bis 1.8.3 war das so.
+        run: python versionsinfo_erzeugen.py
+
+      # --add-data bringt Oberflaeche und Symbol mit in die EXE; die Seite
+      # wird daraus gelesen, nicht aus dem Netz. --windowed unterdrueckt das
+      # Konsolenfenster. --exclude-module cryptography steht hier der
+      # Gleichheit mit build.cmd wegen: pywebview zieht es nur mit, wenn es in
+      # der Umgebung liegt, und gebraucht wird es nicht.
+      - name: EXE bauen
+        run: >
+          pyinstaller --noconfirm --onefile --windowed --clean
+          --name "WetterWidget"
+          --icon "wetter_widget.ico"
+          --version-file "versionsinfo.txt"
+          --add-data "wetter-widget.html;."
+          --add-data "wetter_widget.ico;."
+          --exclude-module cryptography
+          wetter_widget.py
+
+      - name: Liegt im Buendel nur, was in DRITTANBIETER-LIZENZEN.md steht?
+        # Eine neue Fassung von pywebview oder PyInstaller kann ein Paket
+        # mitbringen, dessen Lizenz dann nirgends genannt waere. --streng
+        # bricht genau dann ab. Hier ist der Ort dafuer: Diese EXE wird
+        # veroeffentlicht.
+        run: python buendel_pruefen.py "build\WetterWidget" --streng
+
+      - name: Versionsangaben der EXE pruefen
+        # Der einzige Schritt, der die fertige Datei ansieht: Fehlt die
+        # Versionsressource, faellt es sonst niemandem auf.
+        #
+        # Verglichen wird gegen versionsinfo.txt, die eben aus VERSION in
+        # wetter_widget.py entstanden ist. Damit ist die ganze Kette belegt -
+        # Quelltext, erzeugte Datei, fertige EXE - und zwar auch bei einem
+        # Probelauf ohne Tag. Bei einem Tag muss die Version zusaetzlich zum
+        # Tag passen, sonst wurde VERSION vergessen. Beim Bau von 1.8.3 ist
+        # genau das beinahe passiert.
+        run: |
+          $soll = Get-Content versionsinfo.txt -Raw
+          $sollName = [regex]::Match($soll, "StringStruct\('ProductName', '([^']+)'\)").Groups[1].Value
+          $sollVersion = [regex]::Match($soll, "StringStruct\('ProductVersion', '([^']+)'\)").Groups[1].Value
+          if (-not $sollName -or -not $sollVersion) {
+            throw "versionsinfo.txt enthaelt keine Soll-Werte - wurde sie erzeugt?"
+          }
+          $info = (Get-Item "dist\WetterWidget.exe").VersionInfo
+          if (-not $info.ProductName -or -not $info.ProductVersion) {
+            throw "Die EXE traegt keine Versionsangaben - wurde --version-file uebergeben?"
+          }
+          Write-Output "ProductName: $($info.ProductName), ProductVersion: $($info.ProductVersion)"
+          if ($info.ProductName -ne $sollName -or $info.ProductVersion -ne $sollVersion) {
+            throw "Die EXE meldet $($info.ProductName) $($info.ProductVersion), erwartet war $sollName $sollVersion."
+          }
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and "v$($info.ProductVersion)" -ne $env:GITHUB_REF_NAME) {
+            throw "Tag $($env:GITHUB_REF_NAME) passt nicht zu ProductVersion $($info.ProductVersion) - VERSION vergessen?"
+          }
+
+      - name: Stimmt die Fassung des WebView2-SDK in der Lizenzdatei?
+        # Die Lizenzdatei nennt die Fassung des SDK, das pywebview mitbringt.
+        # Beim naechsten Sprung von pywebview durch Dependabot wuerde diese
+        # Zahl sonst still veralten - niemand sieht sie sich an.
+        run: |
+          $lib = python -c "import webview, os; print(os.path.join(os.path.dirname(webview.__file__), 'lib'))"
+          if ($LASTEXITCODE -ne 0) { throw "pywebview laesst sich nicht finden." }
+          $dll = Join-Path $lib "Microsoft.Web.WebView2.Core.dll"
+          if (-not (Test-Path $dll)) { throw "Die WebView2-Assembly fehlt: $dll" }
+          $fassung = (Get-Item $dll).VersionInfo.ProductVersion
+          Write-Output "WebView2 SDK: $fassung"
+          $liz = Get-Content DRITTANBIETER-LIZENZEN.md -Raw
+          if ($liz -notmatch [regex]::Escape("WebView2 SDK $fassung")) {
+            throw "DRITTANBIETER-LIZENZEN.md nennt nicht die Fassung $fassung des WebView2-SDK."
+          }
+
+      - name: Baut die EXE ihre Seite wirklich auf?
+        # Mit Zeitlimit: Scheitert schon der Import von webview in der
+        # gepackten EXE, zeigt der Bootloader einen Dialog und wartet, bis ihn
+        # jemand wegklickt. Start-Process -Wait wartete dann die 360 Minuten
+        # der Vorgabe ab, statt in Minuten rot zu werden.
+        timeout-minutes: 5
+        # Ein stehendes Fenster beweist wenig: Eine --windowed-EXE zeigt bei
+        # einem Fehler im Start einen Meldungsdialog und laeuft dabei weiter -
+        # ein Rauchtest nach dem Muster "lebt noch" waere dafuer gruen.
+        # --selbsttest verlangt ein Ergebnis: Die Datei entsteht nur, wenn
+        # webview geladen ist, die eingebettete HTML-Datei gefunden wird und
+        # die Startwerte hineinpassen. Ein Fenster oeffnet dabei nichts.
+        run: |
+          $p = Start-Process -FilePath "dist\WetterWidget.exe" `
+                 -ArgumentList '--selbsttest','selbsttest.html' -PassThru -Wait
+          if ($p.ExitCode -ne 0) {
+            if (Test-Path "selbsttest.html.fehler.txt") {
+              Get-Content "selbsttest.html.fehler.txt"
+            } else {
+              # Exit 2 heisst: gescheitert, und auch der Grund liess sich
+              # nicht schreiben - sonst wuerde hier eine Datei liegen.
+              Write-Output "Kein Grund hinterlassen (Exit 2 = auch das ging nicht)."
+            }
+            throw "Die EXE endete mit Exit $($p.ExitCode)."
+          }
+          if (-not (Test-Path "selbsttest.html")) { throw "Die EXE hat keine Seite geschrieben." }
+          $seite = Get-Content "selbsttest.html" -Raw
+          $version = (Get-Item "dist\WetterWidget.exe").VersionInfo.ProductVersion
+          if ($seite -notmatch 'window\.WIDGET_CONFIG') {
+            throw "In der Seite fehlen die Startwerte."
+          }
+          if ($seite -notmatch [regex]::Escape("`"version`": `"$version`"")) {
+            throw "Die Seite nennt nicht die Fassung $version."
+          }
+          Write-Output "Seite aufgebaut: $((Get-Item 'selbsttest.html').Length) Bytes, Fassung $version"
+
+      - name: Pruefsumme bilden
+        # Die SHA-256 haengt als SHA256SUMS.txt am Release: Wer die EXE laedt,
+        # kann sie vor dem ersten Start vergleichen - sie ist nicht signiert.
+        # Bisher wurde diese Summe nach dem Hochladen von Hand gebildet.
+        #
+        # Zwei Leerzeichen zwischen Summe und Name, und am Ende nur ein
+        # Zeilenumbruch nach Unix-Art: Genau das erwartet "sha256sum -c".
+        # Out-File schreibt unter Windows CRLF, und dann liest sha256sum den
+        # Dateinamen mit einem angehaengten Wagenruecklauf und findet die EXE
+        # nicht.
+        run: |
+          $h = (Get-FileHash "dist\WetterWidget.exe" -Algorithm SHA256).Hash.ToLower()
+          Write-Output "SHA-256: $h"
+          # Der Pfad ausdruecklich absolut: .NET richtet sich nicht nach dem
+          # Arbeitsordner von PowerShell, sondern nach dem des Prozesses.
+          $ziel = Join-Path $PWD "dist\SHA256SUMS.txt"
+          [IO.File]::WriteAllText($ziel, "$h  WetterWidget.exe`n")
+
+      - name: Lizenzhinweise und Lizenztexte beilegen
+        # Die Hinweise muessen den Anwender erreichen, nicht nur das
+        # Repository. Die Volltexte kommen aus den Paketen, die gerade
+        # installiert wurden - so passen sie zu genau dieser EXE.
+        #
+        # LICENSE und NOTICE kommen mit: Wer nur die EXE herunterlaedt, bekaeme
+        # sonst ein MIT-Werk ohne seinen Lizenztext. Im Quellpaket liegen beide
+        # schon, an der EXE bisher nicht.
+        run: |
+          Copy-Item DRITTANBIETER-LIZENZEN.md dist\
+          Copy-Item LICENSE dist\
+          Copy-Item NOTICE dist\
+          python lizenztexte_sammeln.py dist\lizenztexte
+          # Ein gescheitertes Python-Skript laesst PowerShell nicht von selbst
+          # abbrechen: Bei einem mehrzeiligen run: zaehlt der Rueckgabewert des
+          # letzten Befehls, und Compress-Archive wuerde den halb gefuellten
+          # Ordner einpacken.
+          if ($LASTEXITCODE -ne 0) { throw "lizenztexte_sammeln.py ist gescheitert." }
+          Compress-Archive -Path "dist\lizenztexte\*" -DestinationPath "dist\WetterWidget-lizenztexte.zip"
+
+      - name: Liegen alle Anhaenge bereit?
+        # if-no-files-found: error schlaegt erst an, wenn ueber alle Muster
+        # zusammen keine einzige Datei gefunden wird - eine einzelne fehlende
+        # Datei faengt es nicht. Deshalb wird hier jede einzeln verlangt.
+        run: |
+          $erwartet = @(
+            "dist\WetterWidget.exe",
+            "dist\SHA256SUMS.txt",
+            "dist\LICENSE",
+            "dist\NOTICE",
+            "dist\DRITTANBIETER-LIZENZEN.md",
+            "dist\WetterWidget-lizenztexte.zip"
+          )
+          foreach ($datei in $erwartet) {
+            if (-not (Test-Path $datei)) { throw "Es fehlt: $datei" }
+            $groesse = (Get-Item $datei).Length
+            if ($groesse -eq 0) { throw "$datei ist leer." }
+            Write-Output "$datei - $groesse Bytes"
+          }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-exe
+          # Vorgabe waere "warn": Dann entstuende das Artefakt auch dann, wenn
+          # gar nichts gefunden wird. Dass jede einzelne Datei da ist, prueft
+          # der Schritt darueber - diese Einstellung allein wuerde es nicht.
+          if-no-files-found: error
+          path: |
+            dist/WetterWidget.exe
+            dist/SHA256SUMS.txt
+            dist/LICENSE
+            dist/NOTICE
+            dist/DRITTANBIETER-LIZENZEN.md
+            dist/WetterWidget-lizenztexte.zip
+
+  release:
+    name: Release veroeffentlichen
+    needs: [quellpaket, windows-exe]
+    runs-on: ubuntu-latest
+    # Nur bei einem Tag. Ohne Tag kennt die Action keinen Namen fuer den
+    # Release und bricht mit "Missing tag_name parameter" ab - ein Probelauf
+    # per workflow_dispatch soll bauen und pruefen duerfen, ohne an diesem
+    # Schritt rot zu werden. Die Bau-Jobs bleiben deshalb ohne Bedingung.
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artefakte
+
+      - name: Release anlegen
+        # Die einzige fremde Action im Projekt - und sie laeuft in dem einen
+        # Job, der contents: write hat. Ein Tag ist verschiebbar: Wer das
+        # Repository dieser Action uebernimmt, koennte "v3" auf eigenen Code
+        # zeigen lassen und damit mit Schreibrecht in diesem Repository
+        # laufen. Ein Commit-Hash laesst sich nicht verschieben. Dependabot
+        # hebt ihn samt der Fassung im Kommentar an; die Actions von GitHub
+        # selbst (actions/*) bleiben beim Tag.
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          draft: true          # erst pruefen, dann veroeffentlichen
+          generate_release_notes: true
+          # Vorgabe ist false: Ein Pfad, der nichts trifft, wuerde den Release
+          # ohne diese Datei anlegen. Hier darf nichts fehlen.
+          fail_on_unmatched_files: true
+          files: |
+            artefakte/quellpaket/*.zip
+            artefakte/windows-exe/WetterWidget.exe
+            artefakte/windows-exe/SHA256SUMS.txt
+            artefakte/windows-exe/LICENSE
+            artefakte/windows-exe/NOTICE
+            artefakte/windows-exe/DRITTANBIETER-LIZENZEN.md
+            artefakte/windows-exe/WetterWidget-lizenztexte.zip

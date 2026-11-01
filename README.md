@@ -49,10 +49,20 @@ Zielrechner nötig, alles steckt in dieser einen Datei.
 > unbekannte Datei gern für ein paar Sekunden fest, während er sie prüft; ein
 > Startversuch in dieser Zeit kann mit „Zugriff verweigert" abbrechen.
 > Einfach kurz warten und erneut starten. Wer sichergehen will, vergleicht
-> vorher die SHA-256-Prüfsumme aus den Release-Notizen.
+> vorher die SHA-256-Prüfsumme aus `SHA256SUMS.txt` am Release:
+> `sha256sum -c SHA256SUMS.txt` oder
+> `Get-FileHash WetterWidget.exe -Algorithm SHA256`.
+
+Am Release hängen neben der EXE die Prüfsummendatei, die MIT-Lizenz dieses
+Programms (`LICENSE`, `NOTICE`), die Lizenzen der mitgelieferten Teile
+(**[DRITTANBIETER-LIZENZEN.md](DRITTANBIETER-LIZENZEN.md)**), deren
+vollständige Lizenztexte als `WetterWidget-lizenztexte.zip` und ein
+Quellpaket. Die Dateieigenschaften der EXE nennen Fassung, Urheber und Lizenz.
 
 Wer nicht darauf vertrauen möchte, baut die .exe mit `build.cmd` in einem Zug
-selbst - der vollständige Quelltext liegt hier.
+selbst - der vollständige Quelltext liegt hier. Veröffentlicht wird sie aus
+dem Release-Workflow heraus, mit den festen Fassungen aus
+`requirements-build.txt`.
 
 Wer lieber aus der Quelle startet:
 
@@ -340,8 +350,19 @@ Die vollständige englische Fassung dieser Seite steht in
     Copyright 2026 Alexander Unverhau
     Created with assistance of Claude AI
 
-Derselbe Vermerk steht im Kopf beider Quelldateien und im Menüpunkt *Über*,
-zusammen mit der Kurzfassung der MIT-Lizenz und den Datenquellen: Messwerte
-und Vorhersage vom Deutschen Wetterdienst über Bright Sky, Ortssuche über
-Open-Meteo. Die DWD-Daten stehen unter der Datenlizenz Deutschland -
-Namensnennung 2.0.
+Derselbe Vermerk steht im Kopf beider Quelldateien, in den Dateieigenschaften
+der EXE, in **[NOTICE](NOTICE)** und im Menüpunkt *Über*, zusammen mit der
+Kurzfassung der MIT-Lizenz und den Datenquellen: Messwerte und Vorhersage vom
+Deutschen Wetterdienst über Bright Sky, Ortssuche über Open-Meteo. Die
+DWD-Daten stehen unter der Datenlizenz Deutschland - Namensnennung 2.0.
+
+Die gebündelte EXE bringt fremde Bestandteile mit - die Python-Laufzeit,
+pywebview, pythonnet und die WebView2-Teile von Microsoft. Jeder von ihnen
+steht mit Lizenz und Fundstelle in
+**[DRITTANBIETER-LIZENZEN.md](DRITTANBIETER-LIZENZEN.md)**; die vollständigen
+Lizenztexte liegen jedem Release als `WetterWidget-lizenztexte.zip` bei. Am
+MIT-Status des Gesamtwerks ändert keiner von ihnen etwas - die Begründung
+steht dort.
+
+Wie Sicherheitslücken gemeldet werden und womit das Programm umgeht, steht in
+**[SECURITY.md](SECURITY.md)**.
