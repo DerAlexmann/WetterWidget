@@ -23,7 +23,7 @@
 # themselves. These are not hash pins, so the build is not bit-for-bit
 # reproducible.
 
-pyinstaller==6.22.2
+pyinstaller==6.22.3
 
 pywebview==6.2.1
 pythonnet==3.1.0
